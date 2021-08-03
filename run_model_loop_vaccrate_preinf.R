@@ -16,13 +16,14 @@ theme_set(
     theme_gray(base_size = 12)
 )
 
-r0_strain1_range <- c(1.5, 3)
+r0_strain1_range <- c(4)
 transmiss_range <- seq(1)
-crossimm_range <- c(0.5, 0.75, 0.95, 1)
-seed_range <- c(0, 14, 35, 70)
-preinf_range <- c(1, 2.5)
-vacc_range <- c(0)
-vacc_start_range <- c(0)
+crossimm_range <- c(0.75, 1)
+# seed_range <- c(0, 125, 250)
+seed_range <- c(0, 14, 35)
+preinf_range <- c(0.5, 1.5)
+vacc_range <- c(1)
+vacc_start_range <- c(0.1, 0.6)
 
 combos <- crossing(r0_strain1_range, transmiss_range, crossimm_range, seed_range, preinf_range, vacc_range, vacc_start_range) %>% 
     filter(!(vacc_range==0 & vacc_start_range==35))
@@ -42,7 +43,10 @@ combos <- crossing(r0_strain1_range, transmiss_range, crossimm_range, seed_range
 for (i in 1:nrow(combos)) {
     
     # Unique scenario name
-    scenario <- sprintf("r%s_transmiss%s_crossimm%s_seed%s_preinf%s_vacc%s_start_%s", combos$r0_strain1_range[i], combos$transmiss_range[i], combos$crossimm_range[i], combos$seed_range[i], combos$preinf_range[i], combos$vacc_range[i], combos$vacc_start_range[i]) %>% str_replace_all("\\.", "pt")
+    scenario <- sprintf("r%s_transmiss%s_crossimm%s_seed%s_preinf%s_vacc%s_start_%s", combos$r0_strain1_range[i], round(combos$transmiss_range[i],2), combos$crossimm_range[i], combos$seed_range[i], combos$preinf_range[i], combos$vacc_range[i], combos$vacc_start_range[i]) %>% str_replace_all("\\.", "pt")
+    
+    # match_set <- scenario
+    match_set <- combos$match_set[i]
     
     # PARAMETERS
     population <- c(total_pop = 60000000)
@@ -52,9 +56,9 @@ for (i in 1:nrow(combos)) {
     ## Vaccination
     vaccination <- c(
         yes = combos$vacc_range[i],
-        init = 0,
-        weekly_rate = 1500000,
-        start = combos$vacc_start_range[i]
+        init = population[["total_pop"]]*combos$vacc_start_range[i],
+        weekly_rate = 0,
+        start = 0
     )
     
     vaccination[["daily_rate"]] <- vaccination[["yes"]]*(vaccination[["weekly_rate"]]/7)
@@ -69,7 +73,7 @@ for (i in 1:nrow(combos)) {
         subclin_inf = 0.5,
         r0 = combos$r0_strain1_range[i],
         crossimm = combos$crossimm_range[i],
-        vacceff_i = 0.85*vaccination[["yes"]],
+        vacceff_i = 0.8*vaccination[["yes"]],
         vacceff_d = 0.9*vaccination[["yes"]]
     )
     
@@ -81,6 +85,8 @@ for (i in 1:nrow(combos)) {
     strain1[["subclin_rec_rate"]] <- 1/strain1[["subclin_period"]]
     strain1[["gen_time"]] <- strain1[["preinf_period"]] + strain1[["inf_duration"]]
     strain1[["beta"]] <- strain1[["r0"]]/(population[["total_pop"]]*strain1[["inf_duration"]])
+    strain1[["vaccrisk_i"]] <- 1 - strain1[["vacceff_i"]]
+    strain1[["vaccrisk_d_i"]] <- (1 - strain1[["vacceff_d"]])/strain1[["vaccrisk_i"]]
     
     ## Strain 2
     seedtime2 <- combos$seed_range[i]
@@ -93,7 +99,7 @@ for (i in 1:nrow(combos)) {
         clin_period = strain1[["clin_period"]],
         subclin_inf = strain1[["subclin_inf"]],
         r0 = strain1[["r0"]]*transmiss,
-        vacceff_i = 0.75*vaccination[["yes"]],
+        vacceff_i = 0.7*vaccination[["yes"]],
         vacceff_d = 0.8*vaccination[["yes"]]
     )
     
@@ -105,6 +111,8 @@ for (i in 1:nrow(combos)) {
     strain2[["subclin_rec_rate"]] <- 1/strain2[["subclin_period"]]
     strain2[["gen_time"]] <- strain2[["preinf_period"]] + strain2[["inf_duration"]]
     strain2[["beta"]] <- strain2[["r0"]]/(population[["total_pop"]]*strain2[["inf_duration"]])
+    strain2[["vaccrisk_i"]] <- 1 - strain2[["vacceff_i"]]
+    strain2[["vaccrisk_d_i"]] <- (1 - strain2[["vacceff_d"]])/strain2[["vaccrisk_i"]]
     
     seed2 <- data.frame(var=c("I_s2", "I_pc2", "I_c2"), time = rep(seedtime2, 3), value = rep(initial_inf, 3), method = rep("add", 3))
     
@@ -118,7 +126,7 @@ for (i in 1:nrow(combos)) {
                I_pc1 = initial_inf,
                I_c1 = initial_inf,
                R1 = 0,
-               V = 0,
+               V = vaccination[["init"]],
                E_v1 = 0,
                E_v2 = 0,
                E2 = 0,
@@ -241,10 +249,11 @@ for (i in 1:nrow(combos)) {
                 growth_rate1_intro = NA,
                 growth_rate2_intro = NA,
                 higher_r0 = NA,
+                higher_r0_rel = NA,
+                higher_r0_preinf = NA,
                 shorter_preinf = NA,
                 shorter_preinf_gentime = NA,
-                reduc_crossimm = NA,
-                reduc_vacceff = NA)
+                match_set = NA)
         
         # Empty table
         end <- end[0,]
@@ -274,10 +283,11 @@ for (i in 1:nrow(combos)) {
             growth_rate1_intro = intro_state$growth_rate1,
             growth_rate2_intro = intro_state$growth_rate2,
             higher_r0 = match_growth$higher_r0[match_growth$name=="r0"],
+            higher_r0_rel = match_growth$higher_r0[match_growth$name=="r0"]/strain2[["r0"]],
+            higher_r0_preinf = match_growth$higher_r0[match_growth$name=="preinf_period"],
             shorter_preinf = match_growth$shorter_preinf[match_growth$name=="preinf_period"],
             shorter_preinf_gentime = match_growth$shorter_preinf[match_growth$name=="gen_time"],
-            reduc_crossimm = match_growth$reduc_crossimm[match_growth$name=="crossimm"],
-            reduc_vacceff = match_growth$reduc_vacceff[match_growth$name=="vacceff_i"])
+            match_set = match_set)
     
     # Append to end file
     write.table(end_state, file=end_file, append=T, quote=F, sep=",", row.names=F, col.names=F)

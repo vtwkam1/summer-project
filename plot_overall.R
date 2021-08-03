@@ -11,18 +11,43 @@ output_folder <- "seir_model_output_transmiss"
 
 end <- read.csv(file.path(".", output_folder, "end.csv"))
 
+end %>% 
+    count(match_set)
+
 # Extract parameters
 end <- end %>%
     mutate(scenario_pt = str_replace_all(scenario, "pt", "."),
            file = str_c(scenario, sys_time, sep="_")) %>% 
     mutate(
         r0_strain1 = str_extract(scenario_pt, "(?<=r)\\d*\\.?\\d*"),
-        transmiss = str_extract(scenario_pt, "(?<=transmiss)\\d*\\.?\\d*"),
         crossimm = str_extract(scenario_pt, "(?<=crossimm)\\d*\\.?\\d*"),
         seed = str_extract(scenario_pt, "(?<=seed)\\d*"),
         vacc = str_extract(scenario_pt, "(?<=vacc)\\d*\\.?\\d*"),
-        vacc_start = str_extract(scenario_pt, "(?<=start_)\\d*\\.?\\d*")
-)
+        vacc_start = str_extract(scenario_pt, "(?<=start_)\\d*\\.?\\d*"),
+        preinf = str_extract(scenario_pt, "(?<=preinf)\\d*\\.?\\d*")) %>% 
+    mutate(transmiss = case_when(preinf!="2.5" ~ str_extract(scenario_pt, "(?<=transmiss)\\d*\\.?\\d*"),
+                              preinf=="2.5" ~ as.character(higher_r0/as.numeric(r0_strain1))))
+
+
+# Combos
+combos <- end %>% 
+    select(r0_strain1, transmiss=higher_r0_rel, crossimm, seed, preinf=higher_r0_preinf, match_set=scenario) %>%
+    mutate(vacc=1,
+           vacc_start30 = 0.3,
+           vacc_start60 = 0.6) %>% 
+    pivot_longer(starts_with("vacc_start"), names_to = "name", values_to = "vacc_start") %>% 
+    select(!name) %>% 
+    rename_with(~ paste(.x, "range", sep="_"), !match_set) %>%
+    mutate(across(!match_set, as.numeric))
+    
+write.csv(combos, file.path(".", output_folder, "vacc_combos.csv"), row.names=F)
+# Combos
+# combos <- end %>% 
+#     select(r0_strain1, transmiss=higher_r0_rel, crossimm, seed, vacc, vacc_start, preinf=higher_r0_preinf, match_set=scenario) %>% 
+#     rename_with(~ paste(.x, "range", sep="_"), !match_set) %>%
+#     mutate(across(!match_set, as.numeric))
+# 
+# write.csv(combos, file.path(".", output_folder, "more_transmiss_combos.csv"), row.names=F)
 
 ## Check missing
 # r0_strain1_range <- c(1.5, 3)

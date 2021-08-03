@@ -30,7 +30,9 @@ plot_seir_model <- function(output, plot_time, seedtime2, vacc_start, output_fol
                 "R1" = "#FDBF6F",
                 "R2" = "#FF7F00")
             ) +
-            scale_y_continuous(labels = scales::label_comma()) +
+            scale_y_continuous(labels = scales::label_comma(),
+                               expand = c(0, 0), 
+                               limits = c(0, NA)) +
             geom_vline(xintercept = seedtime2,
                        linetype="dashed",
                        size=0.5) +

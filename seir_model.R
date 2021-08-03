@@ -99,8 +99,8 @@ run_model <- function(dt, run_time, state_init, parameters, seed2, scenario, sys
         
         crossimm <- strain1[["crossimm"]]
         
-        vacceff_i1 <- strain1[["vacceff_i"]]
-        vacceff_d1 <- strain1[["vacceff_d"]]
+        vaccrisk_i1 <- strain1[["vaccrisk_i"]]
+        vaccrisk_d_i1 <- strain1[["vaccrisk_d_i"]]
         
         foi1 <-  beta1*((subclin_inf1*I_s1) + I_pc1 + I_c1)
         
@@ -116,8 +116,8 @@ run_model <- function(dt, run_time, state_init, parameters, seed2, scenario, sys
         subclin_inf2 <- strain2[["subclin_inf"]]
         subclin_rec_rate2 <- strain2[["subclin_rec_rate"]]
         
-        vacceff_i2 <- strain2[["vacceff_i"]]
-        vacceff_d2 <- strain2[["vacceff_d"]]
+        vaccrisk_i2 <- strain2[["vaccrisk_i"]]
+        vaccrisk_d_i2 <- strain2[["vaccrisk_d_i"]]
         
         foi2 <-  beta2*((subclin_inf2*I_s2) + I_pc2 + I_c2)
         
@@ -125,30 +125,30 @@ run_model <- function(dt, run_time, state_init, parameters, seed2, scenario, sys
         dS <- -S*(foi1 + foi2) - vacc_rate
         
         dE1 <- S*foi1 - inf_rate1*E1 
-        dI_s1 <- inf_rate1*(1-prop_clin1)*E1 + inf_rate1*(1-prop_clin1)*vacceff_d1*E_v1 - subclin_rec_rate1*I_s1
-        dI_pc1 <- inf_rate1*prop_clin1*E1 + inf_rate1*prop_clin1*(1-vacceff_d1)*E_v1 - clin_rate1*I_pc1
+        dI_s1 <- inf_rate1*(1-prop_clin1)*E1 + inf_rate1*(1-prop_clin1)*(1-vaccrisk_d_i1)*E_v1 - subclin_rec_rate1*I_s1
+        dI_pc1 <- inf_rate1*prop_clin1*E1 + inf_rate1*prop_clin1*vaccrisk_d_i1*E_v1 - clin_rate1*I_pc1
         dI_c1 <- clin_rate1*I_pc1 - clin_rec_rate1*I_c1
         dR1 <- subclin_rec_rate1*I_s1 + clin_rec_rate1*I_c1 - (1-crossimm)*foi2*R1
         
-        dV <- vacc_rate - (1-vacceff_i1)*foi1*V - (1-vacceff_i2)*foi2*V
-        dE_v1 <- (1-vacceff_i1)*foi1*V - inf_rate1*E_v1
-        dE_v2 <- (1-vacceff_i2)*foi2*V - inf_rate2*E_v2
+        dV <- vacc_rate - vaccrisk_i1*foi1*V - vaccrisk_i2*foi2*V
+        dE_v1 <- vaccrisk_i1*foi1*V - inf_rate1*E_v1
+        dE_v2 <- vaccrisk_i2*foi2*V - inf_rate2*E_v2
         
         dE2 <- S*foi2 + (1-crossimm)*foi2*R1 - inf_rate2*E2 
-        dI_s2 <- inf_rate2*(1-prop_clin2)*E2 + inf_rate2*(1-prop_clin2)*vacceff_d2*E_v2 - subclin_rec_rate2*I_s2
-        dI_pc2 <- inf_rate2*prop_clin2*E2 + inf_rate2*prop_clin2*(1-vacceff_d2)*E_v2 - clin_rate2*I_pc2
+        dI_s2 <- inf_rate2*(1-prop_clin2)*E2 + inf_rate2*(1-prop_clin2)*(1-vaccrisk_d_i2)*E_v2 - subclin_rec_rate2*I_s2
+        dI_pc2 <- inf_rate2*prop_clin2*E2 + inf_rate2*prop_clin2*vaccrisk_d_i2*E_v2 - clin_rate2*I_pc2
         dI_c2 <- clin_rate2*I_pc2 - clin_rec_rate2*I_c2
         dR2 <- subclin_rec_rate2*I_s2 + clin_rec_rate2*I_c2
         
         # Cumulative measures
         dCum_Iu_s1 <- inf_rate1*(1-prop_clin1)*E1
         dCum_Iu_pc1 <- inf_rate1*prop_clin1*E1 
-        dCum_Iv_s1 <- inf_rate1*(1-prop_clin1)*vacceff_d1*E_v1
-        dCum_Iv_pc1 <- inf_rate1*prop_clin1*(1-vacceff_d1)*E_v1
+        dCum_Iv_s1 <- inf_rate1*(1-prop_clin1)*(1-vaccrisk_d_i1)*E_v1
+        dCum_Iv_pc1 <- inf_rate1*prop_clin1*vaccrisk_d_i1*E_v1
         dCum_Iu_s2 <- inf_rate2*(1-prop_clin2)*E2
         dCum_Iu_pc2 <- inf_rate2*prop_clin2*E2 
-        dCum_Iv_s2 <- inf_rate2*(1-prop_clin2)*vacceff_d2*E_v2
-        dCum_Iv_pc2 <- inf_rate2*prop_clin2*(1-vacceff_d2)*E_v2
+        dCum_Iv_s2 <- inf_rate2*(1-prop_clin2)*(1-vaccrisk_d_i2)*E_v2
+        dCum_Iv_pc2 <- inf_rate2*prop_clin2*vaccrisk_d_i2*E_v2
         dCum_reinf <- (1-crossimm)*foi2*R1
         
         return(list(c(dS, dE1, dI_s1, dI_pc1, dI_c1, dR1, dV, dE_v1, dE_v2, dE2, dI_s2, dI_pc2, dI_c2, dR2, dCum_Iu_s1, dCum_Iu_pc1, dCum_Iv_s1, dCum_Iv_pc1, dCum_Iu_s2, dCum_Iu_pc2, dCum_Iv_s2, dCum_Iv_pc2, dCum_reinf)))
