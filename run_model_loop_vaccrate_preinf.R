@@ -19,14 +19,12 @@ theme_set(
 r0_strain1_range <- c(4)
 transmiss_range <- seq(1)
 crossimm_range <- c(0.75, 1)
-# seed_range <- c(0, 125, 250)
 seed_range <- c(0, 14, 35)
 preinf_range <- c(0.5, 1.5)
 vacc_range <- c(1)
-vacc_start_range <- c(0.1, 0.6)
+vacc_start_range <- c(0.3, 0.6)
 
-combos <- crossing(r0_strain1_range, transmiss_range, crossimm_range, seed_range, preinf_range, vacc_range, vacc_start_range) %>% 
-    filter(!(vacc_range==0 & vacc_start_range==35))
+combos <- crossing(r0_strain1_range, transmiss_range, crossimm_range, seed_range, preinf_range, vacc_range, vacc_start_range) 
 
 #### Running missing models
 # combos <- as.data.frame(missing) %>% 
@@ -45,8 +43,8 @@ for (i in 1:nrow(combos)) {
     # Unique scenario name
     scenario <- sprintf("r%s_transmiss%s_crossimm%s_seed%s_preinf%s_vacc%s_start_%s", combos$r0_strain1_range[i], round(combos$transmiss_range[i],2), combos$crossimm_range[i], combos$seed_range[i], combos$preinf_range[i], combos$vacc_range[i], combos$vacc_start_range[i]) %>% str_replace_all("\\.", "pt")
     
-    # match_set <- scenario
-    match_set <- combos$match_set[i]
+    match_set <- sprintf("r%s_transmiss%s_crossimm%s_seed%s_preinf%s_vacc0_start_0", combos$r0_strain1_range[i], round(combos$transmiss_range[i],2), combos$crossimm_range[i], combos$seed_range[i], combos$preinf_range[i]) %>% str_replace_all("\\.", "pt")
+    # match_set <- combos$match_set[i]
     
     # PARAMETERS
     population <- c(total_pop = 60000000)
