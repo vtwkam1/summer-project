@@ -3,11 +3,11 @@
 library(tidyverse)
 
 ### Write function
-open_file <- function(r0_strain1, transmiss, crossimm, seed, vacc, vacc_start, file_ending, output_folder) {
+open_file <- function(r0_strain1, transmiss, crossimm, preinf, seed, vacc, vacc_start, file_ending, output_folder) {
     
-  file_specific <- file_ending %>% str_replace("\\.", "\\.")
+  file_specific <- file_ending %>% str_replace("\\.", "\\\\\\.")
   
-  scenario_pattern <- sprintf("^r%s_transmiss%s_crossimm%s_seed%s_vacc%s_start_%s", r0_strain1, transmiss, crossimm, seed, vacc, vacc_start) %>% str_replace_all("\\.", "pt")
+  scenario_pattern <- sprintf("^r%s_transmiss%s_crossimm%s_seed%s_preinf%s_vacc%s_start_%s", r0_strain1, transmiss, crossimm, seed, preinf, vacc, vacc_start) %>% str_replace_all("\\.", "pt")
   
   output_files <- list.files(file.path(".", output_folder))
   
@@ -21,13 +21,14 @@ open_file <- function(r0_strain1, transmiss, crossimm, seed, vacc, vacc_start, f
 ### Run function
 output_folder <- "seir_model_output"
 
-file_ending <- "plot_trim.png"
+file_ending <- "calc.csv"
 
-r0_strain1 <- 1.5
-transmiss <- 1.25
-crossimm <- 0.5
-seed <- 35
+r0_strain1 <- 4
+transmiss <- 1
+crossimm <- 1
+preinf <- 2.5
+seed <- 1200
 vacc <- 0
 vacc_start <- 0
 
-open_file(r0_strain1, transmiss, crossimm, seed, vacc, vacc_start, file_ending, output_folder)
+open_file(r0_strain1, transmiss, crossimm, preinf, seed, vacc, vacc_start, file_ending, output_folder)
