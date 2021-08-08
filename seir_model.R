@@ -158,7 +158,7 @@ run_model <- function(dt, run_time, state_init, parameters, seed2, scenario, sys
     times <- seq(0, run_time, dt)
     
     # Run model
-    output <- as.data.frame(ode(y = state, times = times, func = seir_ode, parms = parameters, events = list(data = seed2)))
+    output <- as.data.frame(ode(y = state, times = times, func = seir_ode, parms = parameters, events = list(data = seed2)), method = "ode45")
     
     # Save output
     
