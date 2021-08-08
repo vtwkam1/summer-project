@@ -16,9 +16,9 @@ theme_set(
     theme_gray(base_size = 12)
 )
 
-r0_strain1_range <- c(4)
+r0_strain1_range <- c(1.5, 3, 6)
 transmiss_range <- seq(1)
-crossimm_range <- c(0.75, 1)
+crossimm_range <- c(1)
 seed_range <- c(0, 14, 35)
 preinf_range <- c(0.5, 1.5)
 vacc_range <- c(1)
@@ -26,7 +26,7 @@ vacc_start_range <- c(0.3, 0.6)
 
 combos <- crossing(r0_strain1_range, transmiss_range, crossimm_range, seed_range, preinf_range, vacc_range, vacc_start_range) 
 
-#### Running missing models
+#### Running missing models ----
 # combos <- as.data.frame(missing) %>% 
 #     mutate(
 #         r0_strain1_range = str_extract(missing, "(?<=r)\\d*\\.?\\d*"),
@@ -38,6 +38,7 @@ combos <- crossing(r0_strain1_range, transmiss_range, crossimm_range, seed_range
 #     ) %>% 
 #     mutate(across(!missing, as.numeric))
 
+#### Run ----
 for (i in 1:nrow(combos)) {
     
     # Unique scenario name
@@ -47,9 +48,9 @@ for (i in 1:nrow(combos)) {
     # match_set <- combos$match_set[i]
     
     # PARAMETERS
-    population <- c(total_pop = 60000000)
+    population <- c(total_pop = 1000000)
     
-    initial_inf <- 1000
+    initial_inf <- 10 # Initial seeding of 20 (0.002% population)
     
     ## Vaccination
     vaccination <- c(
@@ -122,7 +123,7 @@ for (i in 1:nrow(combos)) {
                E1 = 0,
                I_s1 = initial_inf,
                I_pc1 = initial_inf,
-               I_c1 = initial_inf,
+               I_c1 = NA,
                R1 = 0,
                V = vaccination[["init"]],
                E_v1 = 0,
@@ -180,7 +181,7 @@ for (i in 1:nrow(combos)) {
             Cum_Inf2 = Cum_Iu_s2 + Cum_Iu_pc2 + Cum_Iv_s2 + Cum_Iv_pc2,
             Cum_Infv = Cum_Iv_s1 + Cum_Iv_pc1 + Cum_Iv_s2 + Cum_Iv_pc2) %>%
         mutate(
-            # New infectious 
+            # New infectious per dt time step
             new_I1 = Cum_Inf1-lag(Cum_Inf1, default=0),
             new_I2 = Cum_Inf2-lag(Cum_Inf2, default=0),
             new_Iv = Cum_Infv-lag(Cum_Infv, default=0)) %>% 
@@ -205,7 +206,26 @@ for (i in 1:nrow(combos)) {
             # Proportion cumulative
             prop_strain1_only = strain1_only/allinf,
             prop_bothstrains = bothstrains/allinf,
-            prop_strain2_only = strain2_only/allinf
+            prop_strain2_only = strain2_only/allinf,
+            # Proportion of population
+            proppop_strain1_only = strain1_only/population[["total_pop"]],
+            proppop_bothstrains = bothstrains/population[["total_pop"]],
+            proppop_strain2_only = strain2_only/population[["total_pop"]],
+            proppop_allinf = allinf/population[["total_pop"]],
+        ) %>% 
+        mutate(
+            # Prevalence of cases (infectious)
+            prevalence_I1 = I1/population[["total_pop"]],
+            prevalence_I2 = I2/population[["total_pop"]],
+            prevalence_I = (I1+I2)/population[["total_pop"]],
+            # Proportion of population
+            proppop_S = S/population[["total_pop"]],
+            proppop_V = V/population[["total_pop"]],
+            proppop_R1 = R1/population[["total_pop"]],
+            propop_R2 = R2/population[["total_pop"]],
+            # Estimated proportion population susceptible to each strain
+            proppop_sus1 <- (S + (1-strain1[["vacceff_i"]])*V)/population[["total_pop"]],
+            proppop_sus2 <- (S + (1-strain2[["vacceff_i"]])*V + (1-strain1[["crossimm"]])*R1)/population[["total_pop"]]
         )
     
     calc_file <- sprintf("%s_%s_calc.csv", scenario, sys_time)
@@ -220,7 +240,11 @@ for (i in 1:nrow(combos)) {
                   daily_new_I2 = sum(new_I2),
                   daily_new_I = sum(new_I)) %>% 
         mutate(prop_new_I1 = daily_new_I1/daily_new_I,
-               prop_new_I2 = daily_new_I2/daily_new_I)
+               prop_new_I2 = daily_new_I2/daily_new_I,
+               # Proportion population
+               proppop_new_I1 = daily_new_I1/population[["total_pop"]],
+               proppop_new_I2 = daily_new_I2/population[["total_pop"]],
+               proppop_new_I = daily_new_I/population[["total_pop"]])
     
     dailyinf_file <- sprintf("%s_%s_dailyinf.csv", scenario, sys_time)
     
