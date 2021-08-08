@@ -7,8 +7,9 @@ match_growthrate <- function(parameters, intro_state, total_pop, scenario, sys_t
         growth_rate <- intro_state$growth_rate2
         
         strain1 <- parameters[["strain1"]]
+        strain2 <- parameters[["strain2"]]
         
-        vacceff_i <- strain1[["vacceff_i"]]
+        vacceff_i <- strain2[["vacceff_i"]]
         crossimm <- strain1[["crossimm"]]
         inf_duration <- strain1[["inf_duration"]]
         preinf_period <- strain1[["preinf_period"]]
@@ -36,9 +37,10 @@ match_growthrate <- function(parameters, intro_state, total_pop, scenario, sys_t
         growth_rate <- intro_state$growth_rate2
         
         strain1 <- parameters[["strain1"]]
+        strain2 <- parameters[["strain2"]]
         
+        vacceff_i <- strain2[["vacceff_i"]]
         r0 <- strain1[["r0"]]
-        vacceff_i <- strain1[["vacceff_i"]]
         crossimm <- strain1[["crossimm"]]
         inf_duration <- strain1[["inf_duration"]]
         
@@ -66,10 +68,10 @@ match_growthrate <- function(parameters, intro_state, total_pop, scenario, sys_t
         growth_rate <- intro_state$growth_rate2
         
         strain1 <- parameters[["strain1"]]
+        strain2 <- parameters[["strain2"]]
         
+        vacceff_i <- strain2[["vacceff_i"]]
         r0 <- strain1[["r0"]]
-        vacceff_i <- strain1[["vacceff_i"]]
-        
         preinf_period <- strain1[["preinf_period"]]
         inf_duration <- strain1[["inf_duration"]]
         gen_time <- preinf_period + inf_duration
