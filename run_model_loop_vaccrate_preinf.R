@@ -16,15 +16,31 @@ theme_set(
     theme_gray(base_size = 12)
 )
 
-r0_strain1_range <- c(1.5, 3, 6)
-transmiss_range <- seq(1)
-crossimm_range <- c(1)
-seed_range <- c(0, 14, 35)
+##### !!!! Check match_set!!!!!
+r0_strain1_range <- c(4)
+transmiss_range <- c(1)
+crossimm_range <- c(0.25, 0.5, 0.75, 1)
+# seed_range <- c(0, 111.02, 222.62, 301.16)
+# seed_range <- c(0, 49.22, 63.1, 72.92)
+seed_range <- c(0, 28.72, 35.6, 40.5)
 preinf_range <- c(0.5, 1.5)
-vacc_range <- c(1)
-vacc_start_range <- c(0.3, 0.6)
+vacc_range <- c(0)
+vacc_start_range <- c(0)
+# vacc_start_range <- c(0.1111, 0.3333)
+# vacc_start_range <- c(0.2, 0.45)
+# vacc_start_range <- c(0.25, 0.5625)
 
-combos <- crossing(r0_strain1_range, transmiss_range, crossimm_range, seed_range, preinf_range, vacc_range, vacc_start_range) 
+
+combos_specify <- crossing(r0_strain1_range, transmiss_range, crossimm_range, seed_range, preinf_range, vacc_range, vacc_start_range) 
+
+## Save combos
+# combos <- combos_specify[0,]
+# write.csv(combos, file=file.path(".", output_folder, "combos.csv"), row.names=F)
+
+combos <- rbind(combos, combos_specify)
+
+# Append new combos
+write.table(combos, file=file.path(".", output_folder, "combos.csv"), append=T, quote=F, sep=",", row.names=F, col.names=F)
 
 #### Running missing models ----
 # combos <- as.data.frame(missing) %>% 
@@ -44,8 +60,9 @@ for (i in 1:nrow(combos)) {
     # Unique scenario name
     scenario <- sprintf("r%s_transmiss%s_crossimm%s_seed%s_preinf%s_vacc%s_start_%s", combos$r0_strain1_range[i], round(combos$transmiss_range[i],2), combos$crossimm_range[i], combos$seed_range[i], combos$preinf_range[i], combos$vacc_range[i], combos$vacc_start_range[i]) %>% str_replace_all("\\.", "pt")
     
-    match_set <- sprintf("r%s_transmiss%s_crossimm%s_seed%s_preinf%s_vacc0_start_0", combos$r0_strain1_range[i], round(combos$transmiss_range[i],2), combos$crossimm_range[i], combos$seed_range[i], combos$preinf_range[i]) %>% str_replace_all("\\.", "pt")
-    # match_set <- combos$match_set[i]
+    # match_set <- sprintf("r%s_transmiss%s_crossimm%s_seed%s_preinf%s_vacc0_start_0", combos$r0_strain1_range[i], round(combos$transmiss_range[i],2), combos$crossimm_range[i], combos$seed_range[i], combos$preinf_range[i]) %>% str_replace_all("\\.", "pt")
+    match_set <- combos$match_set[i]
+    # match_set <- scenario
     
     # PARAMETERS
     population <- c(total_pop = 1000000)
@@ -113,7 +130,7 @@ for (i in 1:nrow(combos)) {
     strain2[["vaccrisk_i"]] <- 1 - strain2[["vacceff_i"]]
     strain2[["vaccrisk_d_i"]] <- (1 - strain2[["vacceff_d"]])/strain2[["vaccrisk_i"]]
     
-    seed2 <- data.frame(var=c("I_s2", "I_pc2", "I_c2"), time = rep(seedtime2, 3), value = rep(initial_inf, 3), method = rep("add", 3))
+    seed2 <- data.frame(var=c("I_s2", "I_pc2"), time = rep(seedtime2, 2), value = rep(initial_inf, 2), method = rep("add", 2))
     
     # Strain 1 only
     # seed2 <- data.frame(var=c("I_s2", "I_pc2", "I_c2"), time = rep(seedtime2, 3), value = rep(0, 3), method = rep("add", 3))
@@ -123,7 +140,7 @@ for (i in 1:nrow(combos)) {
                E1 = 0,
                I_s1 = initial_inf,
                I_pc1 = initial_inf,
-               I_c1 = NA,
+               I_c1 = 0,
                R1 = 0,
                V = vaccination[["init"]],
                E_v1 = 0,
@@ -176,6 +193,7 @@ for (i in 1:nrow(combos)) {
         mutate(
             I1 = I_s1 + I_pc1 + I_c1,
             I2 = I_s2 + I_pc2 + I_c2,
+            I = I1 + I2,
             # Cumulative new infectious
             Cum_Inf1 = Cum_Iu_s1 + Cum_Iu_pc1 + Cum_Iv_s1 + Cum_Iv_pc1,
             Cum_Inf2 = Cum_Iu_s2 + Cum_Iu_pc2 + Cum_Iv_s2 + Cum_Iv_pc2,
@@ -188,6 +206,9 @@ for (i in 1:nrow(combos)) {
         mutate(
             new_I = new_I1 + new_I2,
             Cum_Inf = Cum_Inf1 + Cum_Inf2) %>%
+        mutate(
+            # Cumulative percentage of cases
+            Cumprop_Inf = Cum_Inf/sum(new_I)) %>% 
         mutate(
             # Proportion of new infectious of each strain
             prop_new_I1 = new_I1/new_I,
@@ -211,8 +232,10 @@ for (i in 1:nrow(combos)) {
             proppop_strain1_only = strain1_only/population[["total_pop"]],
             proppop_bothstrains = bothstrains/population[["total_pop"]],
             proppop_strain2_only = strain2_only/population[["total_pop"]],
-            proppop_allinf = allinf/population[["total_pop"]],
+            proppop_allinf = allinf/population[["total_pop"]]
         ) %>% 
+        mutate(
+            cumprop_allinf = allinf/last(allinf)) %>% 
         mutate(
             # Prevalence of cases (infectious)
             prevalence_I1 = I1/population[["total_pop"]],
@@ -222,15 +245,9 @@ for (i in 1:nrow(combos)) {
             proppop_S = S/population[["total_pop"]],
             proppop_V = V/population[["total_pop"]],
             proppop_R1 = R1/population[["total_pop"]],
-            propop_R2 = R2/population[["total_pop"]],
-            # Estimated proportion population susceptible to each strain
-            proppop_sus1 <- (S + (1-strain1[["vacceff_i"]])*V)/population[["total_pop"]],
-            proppop_sus2 <- (S + (1-strain2[["vacceff_i"]])*V + (1-strain1[["crossimm"]])*R1)/population[["total_pop"]]
+            proppop_R2 = R2/population[["total_pop"]]
         )
-    
-    calc_file <- sprintf("%s_%s_calc.csv", scenario, sys_time)
-    
-    write.csv(table, file.path(".", output_folder, calc_file), row.names=F)
+
     
     # Calculate daily new infections
     new_inf_table <- table %>% 
@@ -246,13 +263,51 @@ for (i in 1:nrow(combos)) {
                proppop_new_I2 = daily_new_I2/population[["total_pop"]],
                proppop_new_I = daily_new_I/population[["total_pop"]])
     
+
+    # Capture peak
+    peak_new_I <- max(new_inf_table$daily_new_I)
+    peak_time <- new_inf_table$day[new_inf_table$daily_new_I == peak_new_I]
+    
+    peak_new_I1 <- max(new_inf_table$daily_new_I1)
+    peak_time_new_I1 <- new_inf_table$day[new_inf_table$daily_new_I1 == peak_new_I1]
+    
+    peak_new_I2 <- max(new_inf_table$daily_new_I2)
+    peak_time_new_I2 <- new_inf_table$day[new_inf_table$daily_new_I2 == peak_new_I2][1]
+    
+    # Proportion of peak
+    new_inf_table <- new_inf_table %>% 
+        mutate(
+            prop_peak_new_I1 = daily_new_I1/peak_new_I1,
+            prop_peak_new_I2 = daily_new_I2/peak_new_I2,
+            prop_peak_new_I = daily_new_I/peak_new_I)
+    
+    # Save daily inf file
     dailyinf_file <- sprintf("%s_%s_dailyinf.csv", scenario, sys_time)
     
     write.csv(new_inf_table, file.path(".", output_folder, dailyinf_file), row.names=F)
     
-    # Capture peak
-    peak_new_I <- max(new_inf_table$daily_new_I)
-    peak_time <- new_inf_table$day[new_inf_table$daily_new_I == peak_new_I]
+    
+    ## Peak prevalence of infectious cases
+    peakprev_I <- max(table$I)
+    peakprev_I_time <- table$time[table$I == peakprev_I]
+    
+    peakprev_I1 <- max(table$I1)
+    peakprev_I1_time <- table$time[table$I1 == peakprev_I1]
+    
+    peakprev_I2 <- max(table$I2)
+    peakprev_I2_time <- table$time[table$I2 == peakprev_I2][1]
+    
+    ## Proportion of peak prev
+    table <- table %>% 
+        mutate(
+            prop_peakprev_I = I/peakprev_I,
+            prop_peakprev_I1 = I1/peakprev_I1,
+            prop_peakprev_I2 = I2/peakprev_I2)
+    
+    # Save calculations
+    calc_file <- sprintf("%s_%s_calc.csv", scenario, sys_time)
+    
+    write.csv(table, file.path(".", output_folder, calc_file), row.names=F)
     
     # Save end situation
     ## Create end file
@@ -268,8 +323,19 @@ for (i in 1:nrow(combos)) {
             mutate(
                 peak_new_I = NA,
                 peak_time = NA,
+                peak_new_I1 = NA,
+                peak_time_new_I1 = NA,
+                peak_new_I2 = NA,
+                peak_time_new_I2 = NA,
+                peakprev_I = NA,
+                peakprev_I_time = NA,
+                peakprev_I1 = NA,
+                peakprev_I1_time = NA,
+                peakprev_I2 = NA,
+                peakprev_I2_time = NA,
                 growth_rate1_intro = NA,
                 growth_rate2_intro = NA,
+                sus2_intro = NA,
                 higher_r0 = NA,
                 higher_r0_rel = NA,
                 higher_r0_preinf = NA,
@@ -283,11 +349,18 @@ for (i in 1:nrow(combos)) {
         write.csv(end, end_file, row.names=F)
     }
     
-    end_day <- new_inf_table %>% 
-        filter(day > peak_time & daily_new_I < 1) %>%
-        slice(1) %>% 
-        select(day) %>% 
-        as.numeric()
+    # end_day <- new_inf_table %>% 
+    #     filter(day > peak_time & daily_new_I < 1) %>%
+    #     slice(1) %>% 
+    #     select(day) %>% 
+    #     as.numeric()
+
+    end_day <- table %>%
+        filter(time > peak_time & I < 1) %>%
+        slice(1) %>%
+        select(time) %>%
+        as.numeric() %>% 
+        floor()
     
     if (is.na(end_day)) {
         end_day <- floor(max(table$time))
@@ -302,8 +375,19 @@ for (i in 1:nrow(combos)) {
         mutate(
             peak_new_I = peak_new_I,
             peak_time = peak_time,
+            peak_new_I1 = peak_new_I1,
+            peak_time_new_I1 = peak_time_new_I1,
+            peak_new_I2 = peak_new_I2,
+            peak_time_new_I2 = peak_time_new_I2,
+            peakprev_I = peakprev_I,
+            peakprev_I_time = peakprev_I_time,
+            peakprev_I1 = peakprev_I1,
+            peakprev_I1_time = peakprev_I1_time,
+            peakprev_I2 = peakprev_I2,
+            peakprev_I2_time = peakprev_I2_time,
             growth_rate1_intro = intro_state$growth_rate1,
             growth_rate2_intro = intro_state$growth_rate2,
+            sus2_intro = intro_state$sus2,
             higher_r0 = match_growth$higher_r0[match_growth$name=="r0"],
             higher_r0_rel = match_growth$higher_r0[match_growth$name=="r0"]/strain2[["r0"]],
             higher_r0_preinf = match_growth$higher_r0[match_growth$name=="preinf_period"],
