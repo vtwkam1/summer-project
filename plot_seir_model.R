@@ -2,13 +2,14 @@ plot_seir_model <- function(output, plot_time, seedtime2, vacc_start, output_fol
     # Plot compartments
         plot_states <- output %>% 
             mutate(I1 = I_s1 + I_pc1 + I_c1,
-                   I2 = I_s2 + I_pc2 + I_c2) %>% 
-            select(c(time, S, V, E1, E_v1, E_v2, E2, I1, I2, R1, R2)) %>%
+                   I2 = I_s2 + I_pc2 + I_c2,
+                   I = I1 + I2) %>% 
+            select(c(time, S, V, E1, E_v1, E_v2, E2, I1, I2, I, R1, R2)) %>%
             pivot_longer(cols=!time, names_to = "compartment", values_to = "count") %>%
             mutate(grid = case_when(
                 compartment %in% c("S", "V") ~ "A",
                 compartment %in% c("R1", "R2") ~ "B",
-                compartment %in% c("E1", "E2", "I1", "I2") ~ "C",
+                compartment %in% c("E1", "E2", "I1", "I2", "I") ~ "C",
                 compartment %in% c("E_v1", "E_v2") ~ "D")) %>%
             filter(time %in% seq(0, plot_time, 1)) %>% 
             ggplot(aes(x=time, y=count, colour=compartment)) +
@@ -27,6 +28,7 @@ plot_seir_model <- function(output, plot_time, seedtime2, vacc_start, output_fol
                 "E_v2" = "#33A02C",
                 "I1" = "#FB9A99",
                 "I2" = "#E31A1C",
+                "I" = "#67000D",
                 "R1" = "#FDBF6F",
                 "R2" = "#FF7F00")
             ) +
