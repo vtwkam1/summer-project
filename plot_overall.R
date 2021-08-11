@@ -1,4 +1,4 @@
-################ Change vaccstart str extract
+################ Specify factor with scale manual
 
 library(tidyverse)
 library(ggrepel)
@@ -12,8 +12,6 @@ output_folder <- "seir_model_output"
 
 end <- read.csv(file.path(".", output_folder, "end.csv"))
 
-
-
 # Extract parameters
 end <- end %>%
     mutate(scenario_pt = str_replace_all(scenario, "pt", "."),
@@ -22,25 +20,34 @@ end <- end %>%
         r0_strain1 = str_extract(scenario_pt, "(?<=r)\\d*\\.?\\d*"),
         transmiss = str_extract(scenario_pt, "(?<=transmiss)\\d*\\.?\\d*"),
         crossimm = str_extract(scenario_pt, "(?<=crossimm)\\d*\\.?\\d*"),
-        seed = str_extract(scenario_pt, "(?<=seed)\\d*"),
+        seed = str_extract(scenario_pt, "(?<=seed)\\d*\\.?\\d*"),
         vacc = str_extract(scenario_pt, "(?<=vacc)\\d*\\.?\\d*"),
         vacc_start = str_extract(scenario_pt, "(?<=start_)\\d*\\.?\\d*"),
         preinf = str_extract(scenario_pt, "(?<=preinf)\\d*\\.?\\d*")) %>% 
     mutate(across(c(r0_strain1, crossimm, seed, vacc, vacc_start, preinf, transmiss), as.numeric)) %>% 
     mutate(match_set_pt = str_replace_all(match_set, "pt", ".")) %>% 
     mutate(match_preinf = str_extract(match_set_pt, "(?<=preinf)\\d*\\.?\\d*")) %>% 
-    mutate(label = case_when(preinf==2.5 & match_preinf==0.5 & transmiss > 1 ~ "more transmiss (preinf 0.5)",
-                             preinf==2.5 & match_preinf==1.5 & transmiss > 1 ~ "more transmiss (preinf 1.5)",
-                             preinf==0.5 ~ "preinf 0.5",
-                             preinf==1.5 ~ "preinf 1.5",
-                             preinf==2.5 & transmiss==1 ~ "resident only")) %>% 
+    mutate(label = case_when(preinf==2.5 & match_preinf==0.5 & transmiss > 1 ~ "More transmissable (Preinfectious 0.5 days)",
+                             preinf==2.5 & match_preinf==1.5 & transmiss > 1 ~ "More transmissable (Preinfectious 1.5 days)",
+                             preinf==0.5 ~ "Preinfectious 0.5 days",
+                             preinf==1.5 ~ "Preinfectious 1.5 days",
+                             preinf==2.5 & transmiss==1 ~ "Resident only")) %>% 
     mutate(label = fct_relevel(label,
-                               c("resident only",
-                                 "preinf 0.5",
-                                 "more transmiss (preinf 0.5)",
-                                 "preinf 1.5",
-                                 "more transmiss (preinf 1.5)"
-                               )))
+                               c("Resident only",
+                                 "Preinfectious 0.5 days",
+                                 "More transmissable (Preinfectious 0.5 days)",
+                                 "Preinfectious 1.5 days",
+                                 "More transmissable (Preinfectious 1.5 days)"
+                               ))) %>% 
+    mutate(r0_strain2 = case_when(transmiss==1 ~ r0_strain1,
+                                  transmiss > 1 ~ higher_r0))
+
+# write.csv(end, file.path(".", output_folder, "end_mod.csv", row.names=F))
+
+# Count match sets
+end %>% count(match_set) # 99 unique match_sets
+# [(3 R0 strain1 x 4 crossimm x 2 preinf x 4 seed x 3 vacc_start) x 2 match transmiss] + (3 R0 strain 1 x 3 vacc_start)
+# (288x2) + 9 = 585 permutations
 
 # extract r0s -------
 matched_r0 <- end %>%
@@ -56,30 +63,77 @@ matched_r0 <- end %>%
 
 write.csv(matched_r0, file.path(".", output_folder, "matched_r0.csv"), row.names = F)
 
-# junk ------
-# Combos
-# combos <- end %>%
-#     filter(transmiss!=1)
-#     select(r0_strain1, transmiss=higher_r0_rel, crossimm, seed, preinf=higher_r0_preinf, match_set=scenario) %>%
-#     mutate(vacc=1,
-#            vacc_start30 = 0.3,
-#            vacc_start60 = 0.6) %>%
-#     pivot_longer(starts_with("vacc_start"), names_to = "name", values_to = "vacc_start") %>%
-#     select(!name) %>%
-#     rename_with(~ paste(.x, "range", sep="_"), !match_set) %>%
-#     mutate(across(!match_set, as.numeric))
-#     
-# write.csv(combos, file.path(".", output_folder, "vacc_combos.csv"), row.names=F)
+# Check which ended prematurely ----
+run_longer <- end %>% filter(I > 5) ## Removed and reran in other script
 
-# Combos
-# combos <- end %>% 
-#     select(r0_strain1, transmiss=higher_r0_rel, crossimm, seed, vacc, vacc_start, preinf=higher_r0_preinf, match_set=scenario) %>% 
-#     rename_with(~ paste(.x, "range", sep="_"), !match_set) %>%
-#     mutate(across(!match_set, as.numeric))
-# 
-# write.csv(combos, file.path(".", output_folder, "more_transmiss_combos.csv"), row.names=F)
+file.copy(file.path(".", output_folder, "end.csv"), file.path(".", output_folder, "end_copy.csv")) # Save copy of end.csv
 
-## Check missing
+end <- end %>% filter(I <= 5) %>% select(scenario:match_set) # Remove scenarios which need rerunning from end and drop mutated columns
+
+write.csv(end, file.path(".", output_folder, "end.csv", row.names=F))
+
+## Create combos for those which need rerunning
+combos <- run_longer %>% 
+    select(r0_strain1, transmiss, crossimm, seed, vacc, vacc_start, preinf, match_set, higher_r0) %>%
+    mutate(transmiss = case_when(transmiss==1 ~ transmiss,
+                                 transmiss > 1 ~ higher_r0/r0_strain1)) %>% 
+    select(!higher_r0) %>% 
+    rename_with(~ paste(.x, "range", sep="_"), !match_set) %>%
+    mutate(across(!match_set, as.numeric))
+
+write.csv(combos, file.path(".", output_folder, "run_longer.csv"), row.names = F)
+
+
+# Create combos with matched growth rate, higher R0 ----
+combos <- end %>%
+    filter(seed != 1200) %>% 
+    select(r0_strain1, transmiss=higher_r0_rel, crossimm, seed, vacc, vacc_start, preinf=higher_r0_preinf, match_set=scenario) %>%
+    rename_with(~ paste(.x, "range", sep="_"), !match_set) %>%
+    mutate(across(!match_set, as.numeric))
+
+write.csv(combos, file.path(".", output_folder, "more_transmiss_combos.csv"), row.names=F)
+
+# Combos for vaccination ----
+combos_preinf_vacc <- end %>%
+    filter(seed != 1200, transmiss==1) %>%
+    select(r0_strain1, transmiss, crossimm, seed, preinf, match_set) %>%
+    mutate(vacc=1,
+           vacc_start1 = case_when(r0_strain1==1.5 ~ 0.1111,
+                                   r0_strain1==2.5 ~ 0.2,
+                                   r0_strain1==4 ~ 0.25),
+           vacc_start2 = case_when(r0_strain1==1.5 ~ 0.3333,
+                                    r0_strain1==2.5 ~ 0.45,
+                                    r0_strain1==4 ~ 0.5625)) %>%
+    pivot_longer(starts_with("vacc_start"), names_to = "name", values_to = "vacc_start") %>%
+    select(!name) %>%
+    rename_with(~ paste(.x, "range", sep="_"), !match_set) %>%
+    mutate(across(!match_set, as.numeric)) %>% 
+    relocate(match_set, .after = last_col())
+
+combos_transmiss_vacc <- end %>%
+    filter(seed != 1200, transmiss>1) %>%
+    select(r0_strain1, transmiss, higher_r0, crossimm, seed, preinf, match_set) %>%
+    mutate(transmiss = higher_r0/r0_strain1) %>% 
+    mutate(vacc=1,
+           vacc_start1 = case_when(r0_strain1==1.5 ~ 0.1111,
+                                   r0_strain1==2.5 ~ 0.2,
+                                   r0_strain1==4 ~ 0.25),
+           vacc_start2 = case_when(r0_strain1==1.5 ~ 0.3333,
+                                   r0_strain1==2.5 ~ 0.45,
+                                   r0_strain1==4 ~ 0.5625)) %>%
+    pivot_longer(starts_with("vacc_start"), names_to = "name", values_to = "vacc_start") %>%
+    select(!c(name, higher_r0)) %>%
+    rename_with(~ paste(.x, "range", sep="_"), !match_set) %>%
+    mutate(across(!match_set, as.numeric)) %>% 
+    relocate(match_set, .after = last_col())
+
+combos <- rbind(combos_preinf_vacc, combos_transmiss_vacc)
+
+write.csv(combos, file.path(".", output_folder, "vacc_combos.csv"), row.names=F)
+
+
+
+## Check missing ----
 # r0_strain1_range <- c(1.5, 3)
 # transmiss_range <- seq(1, 2, 0.25)
 # crossimm_range <- c(0.5, 0.75, 0.95, 1)
@@ -123,61 +177,61 @@ end %>%
 
 
 #### Total size ------
-graph_r0 <- 4
+graph_r0 <- 2.5
+graph_vaccstart_range <- unique(end$vacc_start[end$r0_strain1==graph_r0])
 
-allinf_strain1only_vacc0 <- end$allinf[end$r0_strain1==graph_r0 & end$seed==1200 & end$vacc_start == 0]
-allinf_strain1only_vacc0pt3 <- end$allinf[end$r0_strain1== graph_r0 & end$seed==1200 & end$vacc_start == 0.3]
-allinf_strain1only_vacc0pt6 <- end$allinf[end$r0_strain1==graph_r0 & end$seed==1200 & end$vacc_start == 0.6]
+allinf_strain1only_vacc0 <- end$allinf[end$r0_strain1==graph_r0 & end$seed==1200 & end$vacc_start == graph_vaccstart_range[1]]
+allinf_strain1only_vacc1 <- end$allinf[end$r0_strain1== graph_r0 & end$seed==1200 & end$vacc_start == graph_vaccstart_range[2]]
+allinf_strain1only_vacc2 <- end$allinf[end$r0_strain1==graph_r0 & end$seed==1200 & end$vacc_start == graph_vaccstart_range[3]]
 
 graph_table <- end %>%
     filter(r0_strain1 == graph_r0) %>%
-    mutate(rel_allinf = case_when(vacc_start==0 ~ allinf/allinf_strain1only_vacc0,
-                                      vacc_start==0.3 ~ allinf/allinf_strain1only_vacc0pt3,
-                                      vacc_start==0.6 ~ allinf/allinf_strain1only_vacc0pt6))
+    mutate(rel_allinf = case_when(vacc_start==graph_vaccstart_range[1] ~ allinf/allinf_strain1only_vacc0,
+                                      vacc_start==graph_vaccstart_range[2] ~ allinf/allinf_strain1only_vacc1,
+                                      vacc_start==graph_vaccstart_range[3] ~ allinf/allinf_strain1only_vacc2))
 
-# Relative, total cases
+## Relative, total cases
 graph_table %>% 
     filter(seed!=1200) %>% 
-    ggplot(aes(x=as.factor(seed), y=rel_allinf, colour=label, group=match_set, label=transmiss)) +
+    mutate(vacc_start = sprintf("Vaccine coverage\n%s%%", vacc_start*100),
+           crossimm = sprintf("Cross-immunity\n%s%%", crossimm*100)) %>% 
+    ggplot(aes(x=as.factor(seed), y=rel_allinf, colour=label, group=match_set)) +
     geom_point(position=position_dodge(width=0.5)) +
     facet_grid(rows=vars(crossimm),
-               cols=vars(vacc_start),
-               labeller=label_both) +
-    # geom_text_repel(data=subset(graph_table, transmiss > 1),
-    #                 position=position_dodge(width=0.5),
-    #                 size=3,
-    #                 min.segment.length = 0) +
-    labs(caption=sprintf("Strain 1 R0 = %s", graph_r0)) +
+               cols=vars(vacc_start)) +
+    labs(caption = bquote("Resident strain" ~ R[0] == .(graph_r0)),
+         x = "Novel strain seed time (days)",
+         y = "Total cases, relative to resident only",
+         colour = "Characteristic") +
+    # scale_y_log10() +
     scale_colour_manual(values=c(
-        "#1F78B4",
-        "#E31A1C",
-        "#A6CEE3",
-        "#FB9A99"))
+        "Preinfectious 0.5 days" = "#FB9A99",
+        "More transmissable (Preinfectious 0.5 days)" = "#E31A1C",
+        "Preinfectious 1.5 days" = "#A6CEE3",
+        "More transmissable (Preinfectious 1.5 days)" = "#1F78B4"
+        ))
 
 graph_name <- file.path(".", output_folder, sprintf("rel_allinf_r%s.png", graph_r0))
 
 ggsave(graph_name, width = 25, height = 15, units = "cm", dpi = 300)
 
-# Total cases
+## Total cases
 graph_table %>%
     mutate(seed = factor(replace(seed, seed==1200, "NA"))) %>%
-    ggplot(aes(x=seed, y=allinf, colour=label, group=match_set, label=transmiss)) +
+    ggplot(aes(x=seed, y=allinf, colour=label, group=match_set)) +
         geom_point(position=position_dodge(width=0.5)) +
         facet_grid(rows=vars(crossimm),
                    cols=vars(vacc_start),
                    labeller=label_both) +
-        # geom_text_repel(data=subset(graph_table, transmiss > 1),
-        #                 position=position_dodge(width=0.5),
-        #                 size=3,
-        #                 min.segment.length = 0) +
-        labs(caption=sprintf("Strain 1 R0 = %s", graph_r0)) +
+        labs(caption=sprintf("Resident strain R0 = %s", graph_r0)) +
         scale_colour_manual(values=c(
-            "#1F78B4",
-            "#E31A1C",
-            "#A6CEE3",
-            "#FB9A99",
-            "#6A3D9A")) +
-    scale_y_continuous(labels = scales::label_comma())
+            "Resident only" = "#6A3D9A",
+            "Preinfectious 0.5 days" = "#FB9A99",
+            "More transmissable (Preinfectious 0.5 days)" = "#E31A1C",
+            "Preinfectious 1.5 days" = "#A6CEE3",
+            "More transmissable (Preinfectious 1.5 days)" = "#1F78B4")) +
+    scale_y_continuous(labels = scales::label_comma()) +
+    
 
 graph_name <- file.path(".", output_folder, sprintf("allinf_r%s.png", graph_r0))
 
@@ -185,35 +239,34 @@ ggsave(graph_name, width = 25, height = 15, units = "cm", dpi = 300)
 
 # Peak new cases --------
 graph_r0 <- 4
+graph_vaccstart_range <- unique(end$vacc_start[end$r0_strain1==graph_r0])
 
-peakinf_strain1only_vacc0 <- end$peak_new_I[end$r0_strain1==graph_r0 & end$seed==1200 & end$vacc_start == 0]
-peakinf_strain1only_vacc0pt3 <- end$peak_new_I[end$r0_strain1== graph_r0 & end$seed==1200 & end$vacc_start == 0.3]
-peakinf_strain1only_vacc0pt6 <- end$peak_new_I[end$r0_strain1==graph_r0 & end$seed==1200 & end$vacc_start == 0.6]
+peakinf_strain1only_vacc0 <- end$peak_new_I[end$r0_strain1==graph_r0 & end$seed==1200 & end$vacc_start == graph_vaccstart_range[1]]
+peakinf_strain1only_vacc1 <- end$peak_new_I[end$r0_strain1== graph_r0 & end$seed==1200 & end$vacc_start == graph_vaccstart_range[2]]
+peakinf_strain1only_vacc2 <- end$peak_new_I[end$r0_strain1==graph_r0 & end$seed==1200 & end$vacc_start == graph_vaccstart_range[3]]
 
 graph_table <- end %>%
     filter(r0_strain1 == graph_r0) %>%
-    mutate(rel_peakinf = case_when(vacc_start==0 ~ peak_new_I/peakinf_strain1only_vacc0,
-                                  vacc_start==0.3 ~ peak_new_I/peakinf_strain1only_vacc0pt3,
-                                  vacc_start==0.6 ~ peak_new_I/peakinf_strain1only_vacc0pt6))
+    mutate(rel_peakinf = case_when(vacc_start==graph_vaccstart_range[1] ~ peak_new_I/peakinf_strain1only_vacc0,
+                                  vacc_start==graph_vaccstart_range[2] ~ peak_new_I/peakinf_strain1only_vacc1,
+                                  vacc_start==graph_vaccstart_range[3] ~ peak_new_I/peakinf_strain1only_vacc2))
 
 # Relative, peak cases
 graph_table %>% 
     filter(seed!=1200) %>% 
-    ggplot(aes(x=as.factor(seed), y=rel_peakinf, colour=label, group=match_set, label=transmiss)) +
-        geom_point(position=position_dodge(width=0.5)) +
-        facet_grid(rows=vars(crossimm),
-                   cols=vars(vacc_start),
-                   labeller=label_both) +
-        # geom_text_repel(data=subset(graph_table, transmiss > 1),
-        #                 position=position_dodge(width=0.5),
-        #                 size=3,
-        #                 min.segment.length = 0) +
-        labs(caption=sprintf("Strain 1 R0 = %s", graph_r0)) +
-        scale_colour_manual(values=c(
-            "#1F78B4",
-            "#E31A1C",
-            "#A6CEE3",
-            "#FB9A99"))
+    ggplot(aes(x=as.factor(seed), y=rel_peakinf, colour=label, group=match_set)) +
+    geom_point(position=position_dodge(width=0.5)) +
+    facet_grid(rows=vars(crossimm),
+               cols=vars(vacc_start),
+               labeller=label_both) +
+    labs(caption=sprintf("Strain 1 R0 = %s", graph_r0)) +
+    # scale_y_log10() +
+    scale_colour_manual(values=c(
+        "Preinf 0.5" = "#FB9A99",
+        "More transmiss (Preinf 0.5)" = "#E31A1C",
+        "Preinf 1.5" = "#A6CEE3",
+        "More transmiss (Preinf 1.5)" = "#1F78B4"
+    )) +
 
 graph_name <- file.path(".", output_folder, sprintf("rel_peakinf_r%s.png", graph_r0))
 
@@ -222,22 +275,18 @@ ggsave(graph_name, width = 25, height = 15, units = "cm", dpi = 300)
 # Peak cases
 graph_table %>% 
     mutate(seed = factor(replace(seed, seed==1200, "NA"))) %>%
-    ggplot(aes(x=as.factor(seed), y=peak_new_I, colour=label, group=match_set, label=transmiss)) +
+    ggplot(aes(x=as.factor(seed), y=peak_new_I, colour=label, group=match_set)) +
         geom_point(position=position_dodge(width=0.5)) +
         facet_grid(rows=vars(crossimm),
                    cols=vars(vacc_start),
                    labeller=label_both) +
-        # geom_text_repel(data=subset(graph_table, transmiss > 1),
-        #                 position=position_dodge(width=0.5),
-        #                 size=3,
-        #                 min.segment.length = 0) +
         labs(caption=sprintf("Strain 1 R0 = %s", graph_r0)) +
     scale_colour_manual(values=c(
-        "#1F78B4",
-        "#E31A1C",
-        "#A6CEE3",
-        "#FB9A99",
-        "#6A3D9A")) +
+        "resident only" = "#6A3D9A",
+        "preinf 0.5" = "#FB9A99",
+        "more transmiss (preinf 0.5)" = "#E31A1C",
+        "preinf 1.5" = "#A6CEE3",
+        "more transmiss (preinf 1.5)" = "#1F78B4")) +
     scale_y_continuous(labels = scales::label_comma())
     
 graph_name <- file.path(".", output_folder, sprintf("peak_inf_r%s.png", graph_r0))
