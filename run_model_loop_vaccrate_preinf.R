@@ -166,7 +166,7 @@ for (i in 1:nrow(combos)) {
     parameters <- list(strain1 = strain1, strain2 = strain2, vaccination = vaccination, population = population)
     
     # TIME
-    run_time <- 1200
+    run_time <- 2000
     dt <- 0.02
     
     sys_time <- format(Sys.time(), "%d-%m-%Y--%H-%M")
