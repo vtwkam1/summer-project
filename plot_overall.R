@@ -2,7 +2,7 @@
 
 library(tidyverse)
 library(ggrepel)
-library(RColorBrewer)
+# library(RColorBrewer)
 
 theme_set(
     theme_gray(base_size = 12)
@@ -11,6 +11,9 @@ theme_set(
 output_folder <- "seir_model_output"
 
 end <- read.csv(file.path(".", output_folder, "end.csv"))
+
+# Remove if running newest run_model_loop_vaccrate_preinf
+population <- c(total_pop = 1000000)
 
 # Extract parameters
 end <- end %>%
@@ -27,20 +30,27 @@ end <- end %>%
     mutate(across(c(r0_strain1, crossimm, seed, vacc, vacc_start, preinf, transmiss), as.numeric)) %>% 
     mutate(match_set_pt = str_replace_all(match_set, "pt", ".")) %>% 
     mutate(match_preinf = str_extract(match_set_pt, "(?<=preinf)\\d*\\.?\\d*")) %>% 
-    mutate(label = case_when(preinf==2.5 & match_preinf==0.5 & transmiss > 1 ~ "More transmissable (Preinfectious 0.5 days)",
-                             preinf==2.5 & match_preinf==1.5 & transmiss > 1 ~ "More transmissable (Preinfectious 1.5 days)",
-                             preinf==0.5 ~ "Preinfectious 0.5 days",
-                             preinf==1.5 ~ "Preinfectious 1.5 days",
+    mutate(label = case_when(preinf==2.5 & match_preinf==0.5 & transmiss > 1 ~ "More transmissable (Pre-infectious 0.5 days)",
+                             preinf==2.5 & match_preinf==1.5 & transmiss > 1 ~ "More transmissable (Pre-infectious 1.5 days)",
+                             preinf==0.5 ~ "Pre-infectious 0.5 days",
+                             preinf==1.5 ~ "Pre-infectious 1.5 days",
                              preinf==2.5 & transmiss==1 ~ "Resident only")) %>% 
     mutate(label = fct_relevel(label,
                                c("Resident only",
-                                 "Preinfectious 0.5 days",
-                                 "More transmissable (Preinfectious 0.5 days)",
-                                 "Preinfectious 1.5 days",
-                                 "More transmissable (Preinfectious 1.5 days)"
+                                 "Pre-infectious 0.5 days",
+                                 "More transmissable (Pre-infectious 0.5 days)",
+                                 "Pre-infectious 1.5 days",
+                                 "More transmissable (Pre-infectious 1.5 days)"
                                ))) %>% 
     mutate(r0_strain2 = case_when(transmiss==1 ~ r0_strain1,
-                                  transmiss > 1 ~ higher_r0))
+                                  transmiss > 1 ~ higher_r0),
+           proppop_peak_new_I = peak_new_I/population[["total_pop"]])
+
+legend_colour <- c("Resident only" = "#6A3D9A",
+                   "Pre-infectious 0.5 days" = "#FB9A99",
+                   "More transmissable (Pre-infectious 0.5 days)" = "#E31A1C",
+                   "Pre-infectious 1.5 days" = "#A6CEE3",
+                   "More transmissable (Pre-infectious 1.5 days)" = "#1F78B4")
 
 # write.csv(end, file.path(".", output_folder, "end_mod.csv", row.names=F))
 
@@ -177,8 +187,8 @@ end %>%
 
 
 #### Total size ------
-graph_r0 <- 2.5
-graph_vaccstart_range <- unique(end$vacc_start[end$r0_strain1==graph_r0])
+graph_r0 <- 4
+graph_vaccstart_range <- sort(unique(end$vacc_start[end$r0_strain1==graph_r0]))
 
 allinf_strain1only_vacc0 <- end$allinf[end$r0_strain1==graph_r0 & end$seed==1200 & end$vacc_start == graph_vaccstart_range[1]]
 allinf_strain1only_vacc1 <- end$allinf[end$r0_strain1== graph_r0 & end$seed==1200 & end$vacc_start == graph_vaccstart_range[2]]
@@ -188,58 +198,61 @@ graph_table <- end %>%
     filter(r0_strain1 == graph_r0) %>%
     mutate(rel_allinf = case_when(vacc_start==graph_vaccstart_range[1] ~ allinf/allinf_strain1only_vacc0,
                                       vacc_start==graph_vaccstart_range[2] ~ allinf/allinf_strain1only_vacc1,
-                                      vacc_start==graph_vaccstart_range[3] ~ allinf/allinf_strain1only_vacc2))
-
-## Relative, total cases
-graph_table %>% 
-    filter(seed!=1200) %>% 
+                                      vacc_start==graph_vaccstart_range[3] ~ allinf/allinf_strain1only_vacc2)) %>% 
     mutate(vacc_start = sprintf("Vaccine coverage\n%s%%", vacc_start*100),
-           crossimm = sprintf("Cross-immunity\n%s%%", crossimm*100)) %>% 
-    ggplot(aes(x=as.factor(seed), y=rel_allinf, colour=label, group=match_set)) +
+           crossimm = sprintf("Cross-immunity\n%s%%", crossimm*100),
+           seed = round(seed)) %>% 
+    mutate(seed = factor(replace(seed, seed==1200, "NA"))) %>%
+    mutate(crossimm = fct_relevel(crossimm,
+                                  c("Cross-immunity\n25%",
+                                    "Cross-immunity\n50%",
+                                    "Cross-immunity\n75%",
+                                    "Cross-immunity\n100%")),
+           seed = fct_relevel(seed, "NA"))
+
+## Relative, final number infected
+graph_table %>% 
+    filter(seed!="NA") %>% 
+    ggplot(aes(x=seed, y=rel_allinf, colour=label, group=match_set)) +
+    geom_hline(yintercept=1, size=0.4) +
     geom_point(position=position_dodge(width=0.5)) +
     facet_grid(rows=vars(crossimm),
                cols=vars(vacc_start)) +
     labs(caption = bquote("Resident strain" ~ R[0] == .(graph_r0)),
-         x = "Novel strain seed time (days)",
-         y = "Total cases, relative to resident only",
-         colour = "Characteristic") +
+         x = "Novel variant seed time (days)",
+         y = "Final number infected, relative to resident only",
+         colour = "Variant characteristic") +
     # scale_y_log10() +
-    scale_colour_manual(values=c(
-        "Preinfectious 0.5 days" = "#FB9A99",
-        "More transmissable (Preinfectious 0.5 days)" = "#E31A1C",
-        "Preinfectious 1.5 days" = "#A6CEE3",
-        "More transmissable (Preinfectious 1.5 days)" = "#1F78B4"
-        ))
+    scale_colour_manual(values=legend_colour)
 
 graph_name <- file.path(".", output_folder, sprintf("rel_allinf_r%s.png", graph_r0))
+# graph_name <- file.path(".", output_folder, sprintf("rel_allinf_r%s_log.png", graph_r0))
 
-ggsave(graph_name, width = 25, height = 15, units = "cm", dpi = 300)
+ggsave(graph_name, width = 30, height = 16, units = "cm", dpi = 300)
 
-## Total cases
+## Final number infected as percentage of population
 graph_table %>%
-    mutate(seed = factor(replace(seed, seed==1200, "NA"))) %>%
-    ggplot(aes(x=seed, y=allinf, colour=label, group=match_set)) +
+    ggplot(aes(x=seed, y=proppop_allinf, colour=label, group=match_set)) +
         geom_point(position=position_dodge(width=0.5)) +
         facet_grid(rows=vars(crossimm),
-                   cols=vars(vacc_start),
-                   labeller=label_both) +
-        labs(caption=sprintf("Resident strain R0 = %s", graph_r0)) +
-        scale_colour_manual(values=c(
-            "Resident only" = "#6A3D9A",
-            "Preinfectious 0.5 days" = "#FB9A99",
-            "More transmissable (Preinfectious 0.5 days)" = "#E31A1C",
-            "Preinfectious 1.5 days" = "#A6CEE3",
-            "More transmissable (Preinfectious 1.5 days)" = "#1F78B4")) +
-    scale_y_continuous(labels = scales::label_comma()) +
+                   cols=vars(vacc_start)) +
+    labs(caption = bquote("Resident strain" ~ R[0] == .(graph_r0)),
+        x = "Novel variant seed time (days)",
+        y = "Final number infected (% population)",
+        colour = "Variant characteristic") +
+        scale_colour_manual(values=legend_colour) +
+    scale_y_continuous(labels = scales::label_percent(accuracy=1),
+                       limits = c(0, NA))
     
-
 graph_name <- file.path(".", output_folder, sprintf("allinf_r%s.png", graph_r0))
 
-ggsave(graph_name, width = 25, height = 15, units = "cm", dpi = 300)
+ggsave(graph_name, width = 30, height = 16, units = "cm", dpi = 300)
 
-# Peak new cases --------
+
+
+# Peak new cases -----------------------------
 graph_r0 <- 4
-graph_vaccstart_range <- unique(end$vacc_start[end$r0_strain1==graph_r0])
+graph_vaccstart_range <- sort(unique(end$vacc_start[end$r0_strain1==graph_r0]))
 
 peakinf_strain1only_vacc0 <- end$peak_new_I[end$r0_strain1==graph_r0 & end$seed==1200 & end$vacc_start == graph_vaccstart_range[1]]
 peakinf_strain1only_vacc1 <- end$peak_new_I[end$r0_strain1== graph_r0 & end$seed==1200 & end$vacc_start == graph_vaccstart_range[2]]
@@ -247,125 +260,138 @@ peakinf_strain1only_vacc2 <- end$peak_new_I[end$r0_strain1==graph_r0 & end$seed=
 
 graph_table <- end %>%
     filter(r0_strain1 == graph_r0) %>%
-    mutate(rel_peakinf = case_when(vacc_start==graph_vaccstart_range[1] ~ peak_new_I/peakinf_strain1only_vacc0,
+    mutate(rel_peak_new_I = case_when(vacc_start==graph_vaccstart_range[1] ~ peak_new_I/peakinf_strain1only_vacc0,
                                   vacc_start==graph_vaccstart_range[2] ~ peak_new_I/peakinf_strain1only_vacc1,
-                                  vacc_start==graph_vaccstart_range[3] ~ peak_new_I/peakinf_strain1only_vacc2))
+                                  vacc_start==graph_vaccstart_range[3] ~ peak_new_I/peakinf_strain1only_vacc2)) %>% 
+    mutate(vacc_start = sprintf("Vaccine coverage\n%s%%", vacc_start*100),
+           crossimm = sprintf("Cross-immunity\n%s%%", crossimm*100),
+           seed = round(seed)) %>% 
+    mutate(seed = factor(replace(seed, seed==1200, "NA"))) %>%
+    mutate(crossimm = fct_relevel(crossimm,
+                                  c("Cross-immunity\n25%",
+                                    "Cross-immunity\n50%",
+                                    "Cross-immunity\n75%",
+                                    "Cross-immunity\n100%")),
+           seed = fct_relevel(seed, "NA"))
 
 # Relative, peak cases
 graph_table %>% 
-    filter(seed!=1200) %>% 
-    ggplot(aes(x=as.factor(seed), y=rel_peakinf, colour=label, group=match_set)) +
+    filter(seed!="NA") %>% 
+    ggplot(aes(x=seed, y=rel_peak_new_I, colour=label, group=match_set)) +
+    geom_hline(yintercept=1, size=0.4) +
     geom_point(position=position_dodge(width=0.5)) +
     facet_grid(rows=vars(crossimm),
-               cols=vars(vacc_start),
-               labeller=label_both) +
-    labs(caption=sprintf("Strain 1 R0 = %s", graph_r0)) +
+               cols=vars(vacc_start)) +
+    labs(caption = bquote("Resident strain" ~ R[0] == .(graph_r0)),
+         x = "Novel variant seed time (days)",
+         y = "Peak cases, relative to resident only",
+         colour = "Variant characteristic") +
     # scale_y_log10() +
-    scale_colour_manual(values=c(
-        "Preinf 0.5" = "#FB9A99",
-        "More transmiss (Preinf 0.5)" = "#E31A1C",
-        "Preinf 1.5" = "#A6CEE3",
-        "More transmiss (Preinf 1.5)" = "#1F78B4"
-    )) +
+    scale_colour_manual(values=legend_colour)
 
-graph_name <- file.path(".", output_folder, sprintf("rel_peakinf_r%s.png", graph_r0))
+graph_name <- file.path(".", output_folder, sprintf("rel_peak_new_I_r%s.png", graph_r0))
 
-ggsave(graph_name, width = 25, height = 15, units = "cm", dpi = 300)
+ggsave(graph_name, width = 30, height = 16, units = "cm", dpi = 300)
 
 # Peak cases
 graph_table %>% 
-    mutate(seed = factor(replace(seed, seed==1200, "NA"))) %>%
-    ggplot(aes(x=as.factor(seed), y=peak_new_I, colour=label, group=match_set)) +
+    ggplot(aes(x=seed, y=proppop_peak_new_I, colour=label, group=match_set)) +
         geom_point(position=position_dodge(width=0.5)) +
         facet_grid(rows=vars(crossimm),
-                   cols=vars(vacc_start),
-                   labeller=label_both) +
-        labs(caption=sprintf("Strain 1 R0 = %s", graph_r0)) +
-    scale_colour_manual(values=c(
-        "resident only" = "#6A3D9A",
-        "preinf 0.5" = "#FB9A99",
-        "more transmiss (preinf 0.5)" = "#E31A1C",
-        "preinf 1.5" = "#A6CEE3",
-        "more transmiss (preinf 1.5)" = "#1F78B4")) +
-    scale_y_continuous(labels = scales::label_comma())
+                   cols=vars(vacc_start)) +
+    labs(caption = bquote("Resident strain" ~ R[0] == .(graph_r0)),
+         x = "Novel variant seed time (days)",
+         y = "Peak daily cases (% population)",
+         colour = "Variant characteristic") +
+    # scale_y_log10() +
+    scale_colour_manual(values=legend_colour) +
+    scale_y_continuous(labels = scales::label_percent(accuracy=0.1),
+                       limits=c(0,NA))
     
-graph_name <- file.path(".", output_folder, sprintf("peak_inf_r%s.png", graph_r0))
+graph_name <- file.path(".", output_folder, sprintf("peak_new_I_r%s.png", graph_r0))
 
-ggsave(graph_name, width = 25, height = 15, units = "cm", dpi = 300)
+ggsave(graph_name, width = 30, height = 16, units = "cm", dpi = 300)
 
 # Peak time -----
 graph_r0 <- 4
+graph_vaccstart_range <- sort(unique(end$vacc_start[end$r0_strain1==graph_r0]))
 
-peaktime_strain1only_vacc0 <- end$peak_time[end$r0_strain1==graph_r0 & end$seed==1200 & end$vacc_start == 0]
-peaktime_strain1only_vacc0pt3 <- end$peak_time[end$r0_strain1== graph_r0 & end$seed==1200 & end$vacc_start == 0.3]
-peaktime_strain1only_vacc0pt6 <- end$peak_time[end$r0_strain1==graph_r0 & end$seed==1200 & end$vacc_start == 0.6]
+peaktime_strain1only_vacc0 <- end$peak_time[end$r0_strain1==graph_r0 & end$seed==1200 & end$vacc_start == graph_vaccstart_range[1]]
+peaktime_strain1only_vacc1 <- end$peak_time[end$r0_strain1== graph_r0 & end$seed==1200 & end$vacc_start == graph_vaccstart_range[2]]
+peaktime_strain1only_vacc2 <- end$peak_time[end$r0_strain1==graph_r0 & end$seed==1200 & end$vacc_start == graph_vaccstart_range[3]]
 
 graph_table <- end %>%
     filter(r0_strain1 == graph_r0) %>%
-    mutate(rel_peaktime = case_when(vacc_start==0 ~ peak_time-peaktime_strain1only_vacc0,
-                                   vacc_start==0.3 ~ peak_time-peaktime_strain1only_vacc0pt3,
-                                   vacc_start==0.6 ~ peak_time-peaktime_strain1only_vacc0pt6))
+    mutate(rel_peaktime = case_when(vacc_start==graph_vaccstart_range[1] ~ peak_time-peaktime_strain1only_vacc0,
+                                   vacc_start==graph_vaccstart_range[2] ~ peak_time-peaktime_strain1only_vacc1,
+                                   vacc_start==graph_vaccstart_range[3] ~ peak_time-peaktime_strain1only_vacc2)) %>% 
+    mutate(vacc_start = sprintf("Vaccine coverage\n%s%%", vacc_start*100),
+           crossimm = sprintf("Cross-immunity\n%s%%", crossimm*100),
+           seed = round(seed)) %>% 
+    mutate(seed = factor(replace(seed, seed==1200, "NA"))) %>%
+    mutate(crossimm = fct_relevel(crossimm,
+                                  c("Cross-immunity\n25%",
+                                    "Cross-immunity\n50%",
+                                    "Cross-immunity\n75%",
+                                    "Cross-immunity\n100%")),
+           seed = fct_relevel(seed, "NA"))
 
 # Relative peak time
 graph_table %>% 
-    filter(seed!=1200) %>% 
-    ggplot(aes(x=as.factor(seed), y=rel_peaktime, colour=label, group=match_set, label=transmiss)) +
-        geom_point(position=position_dodge(width=0.5)) +
-        facet_grid(rows=vars(crossimm),
-                   cols=vars(vacc_start),
-                   labeller=label_both) +
-        # geom_text_repel(data=subset(graph_table, transmiss > 1),
-        #                 position=position_dodge(width=0.5),
-        #                 size=3,
-        #                 min.segment.length = 0) +
-        labs(caption=sprintf("Strain 1 R0 = %s", graph_r0)) +
-        scale_colour_manual(values=c(
-            "#1F78B4",
-            "#E31A1C",
-            "#A6CEE3",
-            "#FB9A99"))
+    filter(seed!="NA") %>% 
+    ggplot(aes(x=seed, y=rel_peaktime, colour=label, group=match_set)) +
+    geom_hline(yintercept=1, size=0.4) +
+    geom_point(position=position_dodge(width=0.5)) +
+    facet_grid(rows=vars(crossimm),
+                   cols=vars(vacc_start)) +
+    labs(caption = bquote("Resident strain" ~ R[0] == .(graph_r0)),
+         x = "Novel variant seed time (days)",
+         y = "Peak day, relative to resident only",
+         colour = "Variant characteristic") +
+    # scale_y_log10() +
+    scale_colour_manual(values=legend_colour) 
 
 graph_name <- file.path(".", output_folder, sprintf("rel_peaktime_r%s.png", graph_r0))
 
-ggsave(graph_name, width = 25, height = 15, units = "cm", dpi = 300)
+ggsave(graph_name, width = 30, height = 16, units = "cm", dpi = 300)
 
 # Peak time
 graph_table %>% 
-    mutate(seed = factor(replace(seed, seed==1200, "NA"))) %>%
-    ggplot(aes(x=as.factor(seed), y=peak_time, colour=label, group=match_set, label=transmiss)) +
-        geom_point(position=position_dodge(width=0.5)) +
-        facet_grid(rows=vars(crossimm),
-                   cols=vars(vacc_start),
-                   labeller=label_both) +
-        # geom_text_repel(data=subset(graph_table, transmiss > 1),
-        #                 position=position_dodge(width=0.5),
-        #                 size=3,
-        #                 min.segment.length = 0) +
-        labs(caption=sprintf("Strain 1 R0 = %s", graph_r0)) +
-        scale_colour_manual(values=c(
-            "#1F78B4",
-            "#E31A1C",
-            "#A6CEE3",
-            "#FB9A99",
-            "#6A3D9A")) +
-        scale_y_continuous(labels = scales::label_comma())
+    ggplot(aes(x=seed, y=peak_time, colour=label, group=match_set)) +
+    geom_point(position=position_dodge(width=0.5)) +
+    facet_grid(rows=vars(crossimm),
+                   cols=vars(vacc_start)) +
+    labs(caption = bquote("Resident strain" ~ R[0] == .(graph_r0)),
+         x = "Novel variant seed time (days)",
+         y = "Peak day",
+         colour = "Variant characteristic") +
+    # scale_y_log10() +
+    scale_colour_manual(values=legend_colour) +
+    scale_y_continuous(labels = scales::label_comma())
 
 graph_name <- file.path(".", output_folder, sprintf("peaktime_r%s.png", graph_r0))
 
-ggsave(graph_name, width = 25, height = 15, units = "cm", dpi = 300)
+ggsave(graph_name, width = 30, height = 16, units = "cm", dpi = 300)
 
 
 ###### Cumulative --------
-graph_r0 <- 1.5
+graph_r0 <- 4
 
 graph_table <- end %>% 
     filter(r0_strain1==graph_r0) %>% 
-    select(r0_strain1, transmiss, crossimm, seed, vacc, vacc_start, preinf, match_preinf, label, strain1_only, bothstrains, strain2_only) %>%
-    mutate(crossimm_vacc = sprintf("crossimm %s\nvacc %s", crossimm, vacc_start),
-           seed_label = case_when(seed==1200 ~ "none", 
-                               seed!=1200 ~ sprintf("seed %s", seed))) %>%
-    mutate(seed_label = factor(seed_label)) %>% 
-    pivot_longer(c(strain1_only, bothstrains, strain2_only), names_to = "strain", values_to = "count")
+    select(r0_strain1, transmiss, crossimm, seed, vacc, vacc_start, preinf, match_preinf, label, proppop_strain1_only, proppop_bothstrains, proppop_strain2_only) %>%
+    mutate(crossimm_vacc = factor(sprintf("Cross-immunity %s%%\nVaccine coverage %s%%", crossimm*100, vacc_start*100)),
+           seed_label = factor(case_when(seed==1200 ~ "NA", 
+                               seed!=1200 ~ sprintf("Seed day %s", round(seed))))) %>%
+    mutate(crossimm_vacc = fct_shift(crossimm_vacc, 3)) %>% 
+    pivot_longer(c(proppop_strain1_only, proppop_bothstrains, proppop_strain2_only), names_to = "strain", values_to = "count") %>% 
+    mutate(strain = fct_recode(strain,
+                               "Both strains" = "proppop_bothstrains",
+                               "Resident only" = "proppop_strain1_only",
+                               "Variant only" = "proppop_strain2_only"),
+           label = fct_recode(label,
+                              "More transmissable\n(Pre-infectious 0.5 days)" = "More transmissable (Pre-infectious 0.5 days)",
+                              "More transmissable\n(Pre-infectious 1.5 days)" = "More transmissable (Pre-infectious 1.5 days)"))
 
 ggplot(graph_table, aes(x=label, y=count, fill=strain)) +
     geom_bar(position="stack", stat="identity") +
@@ -373,63 +399,67 @@ ggplot(graph_table, aes(x=label, y=count, fill=strain)) +
                rows = vars(crossimm_vacc),
                scale = "free_x", 
                space = "free_x") +
-    scale_y_continuous(labels = scales::label_comma()) +
-    labs(caption=sprintf("Strain 1 R0 = %s", graph_r0)) +
+    scale_y_continuous(labels = scales::label_percent(accuracy=1),
+                       breaks = scales::breaks_extended()) +
+    labs(caption = bquote("Resident strain" ~ R[0] == .(graph_r0)),
+         x = "Variant characteristic",
+         y = "% population",
+         fill = "Infecting strain") +    
     theme(plot.caption = element_text(hjust = 1),
           axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
           strip.text.y.right = element_text(angle = 0))
 
 graph_name <- file.path(".", output_folder, sprintf("cumulative_r%s.png", graph_r0))
 
-ggsave(graph_name, width = 25, height = 25, units = "cm", dpi = 300)
+ggsave(graph_name, width = 24, height = 24, units = "cm", dpi = 300)
     
 #### Plotting new infections ----
-graph_r0 <- 4
-graph_seed <- 0
-
-plot_scenarios <- end %>% filter(r0_strain1==graph_r0, seed==graph_seed)
-
-plot_scenarios <- rbind(plot_scenarios, end[end$seed==1200 & end$r0_strain1==graph_r0,])
-
-daily_inf_table <- data.frame(scenario=numeric(), day=numeric(), daily_new_I1=numeric(), daily_new_I2=numeric(), daily_new_I=numeric(), prop_new_I1=numeric(), prop_new_I2=numeric(), r0_strain1=numeric(), crossimm=numeric(), seed=numeric(), vacc=numeric(), vacc_start=numeric(), preinf=numeric(), transmiss=numeric(), match_preinf=numeric())
-
-for (i in 1:length(plot_scenarios$file)) {
-    filename <- sprintf("%s_dailyinf.csv", plot_scenarios$file[i])
-
-    table <- read.csv(file.path(".", output_folder, filename)) %>% 
-        mutate(scenario=plot_scenarios$scenario[i],
-               .before=day) %>% 
-        mutate(r0_strain1=plot_scenarios$r0_strain1[i], 
-               crossimm=plot_scenarios$crossimm[i], 
-               seed=plot_scenarios$seed[i], 
-               vacc=plot_scenarios$vacc[i], 
-               vacc_start=plot_scenarios$vacc_start[i], 
-               preinf=plot_scenarios$preinf[i], 
-               transmiss=plot_scenarios$transmiss[i], 
-               match_preinf=plot_scenarios$match_preinf[i])
-    
-    daily_inf_table <- rbind(daily_inf_table, table)
-}
-
-daily_inf_table %>% 
-    ggplot(aes(x=day, y=daily_new_I, colour=label)) +
-    geom_line(size=0.8) +
-    facet_grid(cols=vars(crossimm),
-               rows=vars(vacc_start)) +
-    scale_colour_manual(values=c(
-        "#1F78B4",
-        "#E31A1C",
-        "#A6CEE3",
-        "#FB9A99",
-        "#6A3D9A"
-    )) +
-    scale_x_continuous(limits=c(0,300)) +
-    geom_vline(xintercept = graph_seed, linetype="dashed", size=0.5) +
-    scale_y_continuous(labels = scales::label_comma())
+# graph_r0 <- 4
+# graph_seed <- 0
+# 
+# plot_scenarios <- end %>% filter(r0_strain1==graph_r0, seed==graph_seed)
+# 
+# plot_scenarios <- rbind(plot_scenarios, end[end$seed==1200 & end$r0_strain1==graph_r0,])
+# 
+# daily_inf_table <- data.frame(scenario=numeric(), day=numeric(), daily_new_I1=numeric(), daily_new_I2=numeric(), daily_new_I=numeric(), prop_new_I1=numeric(), prop_new_I2=numeric(), r0_strain1=numeric(), crossimm=numeric(), seed=numeric(), vacc=numeric(), vacc_start=numeric(), preinf=numeric(), transmiss=numeric(), match_preinf=numeric())
+# 
+# for (i in 1:length(plot_scenarios$file)) {
+#     filename <- sprintf("%s_dailyinf.csv", plot_scenarios$file[i])
+# 
+#     table <- read.csv(file.path(".", output_folder, filename)) %>% 
+#         mutate(scenario=plot_scenarios$scenario[i],
+#                .before=day) %>% 
+#         mutate(r0_strain1=plot_scenarios$r0_strain1[i], 
+#                crossimm=plot_scenarios$crossimm[i], 
+#                seed=plot_scenarios$seed[i], 
+#                vacc=plot_scenarios$vacc[i], 
+#                vacc_start=plot_scenarios$vacc_start[i], 
+#                preinf=plot_scenarios$preinf[i], 
+#                transmiss=plot_scenarios$transmiss[i], 
+#                match_preinf=plot_scenarios$match_preinf[i])
+#     
+#     daily_inf_table <- rbind(daily_inf_table, table)
+# }
+# 
+# daily_inf_table %>% 
+#     ggplot(aes(x=day, y=daily_new_I, colour=label)) +
+#     geom_line(size=0.8) +
+#     facet_grid(cols=vars(crossimm),
+#                rows=vars(vacc_start)) +
+#     scale_colour_manual(values=c(
+#         "#1F78B4",
+#         "#E31A1C",
+#         "#A6CEE3",
+#         "#FB9A99",
+#         "#6A3D9A"
+#     )) +
+#     scale_x_continuous(limits=c(0,300)) +
+#     geom_vline(xintercept = graph_seed, linetype="dashed", size=0.5) +
+#     scale_y_continuous(labels = scales::label_comma())
 
 #### Plotting new infections, all seeds----
-graph_r0 <- 1.5
-graph_limit <- 1200
+graph_r0 <- 4
+graph_limit <- 250
 
 plot_scenarios <- end %>% filter(r0_strain1==graph_r0)
 
@@ -456,52 +486,135 @@ for (i in 1:length(plot_scenarios$file)) {
 }
 
 graph_table <- daily_inf_table %>% 
-    mutate(seed = if_else(seed==1200, 0, seed)) %>% 
-    mutate(crossimm_seed = sprintf("seed %s\ncrossimm %s", seed, crossimm)) %>% 
-    mutate(label = case_when(preinf==2.5 & match_preinf==0.5 & transmiss > 1 ~ "more transmiss (preinf 0.5)",
-                                                                                                    preinf==2.5 & match_preinf==1.5 & transmiss > 1 ~ "more transmiss (preinf 1.5)",
-                                                                                                    preinf==0.5 ~ "preinf 0.5",
-                                                                                                    preinf==1.5 ~ "preinf 1.5",
-                                                                                                    preinf==2.5 & transmiss==1 ~ "resident only")) %>% 
+    mutate(seed = if_else(seed==1200, 0, round(seed))) %>% 
+    mutate(crossimm_seed = sprintf("Seed day %s\nCross-immunity %s%%", seed, crossimm*100)) %>% 
+    mutate(crossimm_seed = fct_relevel(crossimm_seed, unique(str_sort(crossimm_seed, numeric = T)))) %>% 
+    mutate(label = case_when(preinf==2.5 & match_preinf==0.5 & transmiss > 1 ~ "More transmissable (Pre-infectious 0.5 days)",
+                             preinf==2.5 & match_preinf==1.5 & transmiss > 1 ~ "More transmissable (Pre-infectious 1.5 days)",
+                             preinf==0.5 ~ "Pre-infectious 0.5 days",
+                             preinf==1.5 ~ "Pre-infectious 1.5 days",
+                             preinf==2.5 & transmiss==1 ~ "Resident only")) %>% 
     mutate(label = fct_relevel(label,
-                               c("resident only",
-                                 "preinf 0.5",
-                                 "more transmiss (preinf 0.5)",
-                                 "preinf 1.5",
-                                 "more transmiss (preinf 1.5)"
+                               c("Resident only",
+                                 "Pre-infectious 0.5 days",
+                                 "More transmissable (Pre-infectious 0.5 days)",
+                                 "Pre-infectious 1.5 days",
+                                 "More transmissable (Pre-infectious 1.5 days)"
                                ))) %>% 
-    mutate(vacc_label = factor(sprintf("vacc %s", vacc_start)))
+    mutate(vacc_label = factor(sprintf("Vaccine coverage %s%%", vacc_start*100)))
 
 
 seed_line <- graph_table %>% 
     group_by(crossimm_seed) %>% 
     summarise(seed_line = mean(seed))
     
-ggplot(graph_table, aes(x=day, y=daily_new_I, colour=label)) +
+ggplot(graph_table, aes(x=day, y=proppop_new_I, colour=label)) +
     geom_line() +
-    facet_grid(cols=vars(crossimm_seed),
-               rows=vars(vacc_label)) +
-    scale_colour_manual(values=c(
-        "#6A3D9A",
-        "#FB9A99",
-        "#E31A1C",
-        "#A6CEE3",
-        "#1F78B4"
-    )) +
+    facet_grid(rows=vars(crossimm_seed),
+               cols=vars(vacc_label)) +
+    scale_colour_manual(values=legend_colour) +
     scale_x_continuous(limits=c(0,graph_limit)) +
     geom_vline(data=seed_line, 
                aes(xintercept=seed_line), 
                linetype="dashed", size=0.5) +
-    scale_y_continuous(labels = scales::label_comma()) +
-    labs(caption=sprintf("Strain 1 R0 = %s", graph_r0)) +
+    scale_y_continuous(labels = scales::label_percent(accuracy=0.1)) +
+    labs(caption = bquote("Resident strain" ~ R[0] == .(graph_r0)),
+         x = "Day",
+         y = "Daily new cases (% population)",
+         colour = "Variant characteristic") +
     theme(plot.caption = element_text(hjust = 1),
-          axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+          strip.text.y.right = element_text(angle = 0))
     
 
 graph_name <- file.path(".", output_folder, sprintf("newinf_r%s.png", graph_r0))
 
-ggsave(graph_name, width = 25, height = 15, units = "cm", dpi = 300)
+ggsave(graph_name, width = 28, height = 25, units = "cm", dpi = 300)
+
+#### Plotting susceptibles and R1, all seeds----
+graph_r0 <- 2.5
+graph_limit <- 500
+
+plot_scenarios <- end %>% filter(r0_strain1==graph_r0)
+
+# plot_scenarios <- rbind(plot_scenarios, end[end$seed==1200 & end$r0_strain1==graph_r0,])
+
+S_R1 <- data.frame(scenario=numeric(), time=numeric(), proppop_S=numeric(), proppop_R1=numeric(), proppop_V=numeric(), r0_strain1=numeric(), crossimm=numeric(), seed=numeric(), vacc=numeric(), vacc_start=numeric(), preinf=numeric(), transmiss=numeric(), match_preinf=numeric())
+
+for (i in 1:length(plot_scenarios$file)) {
+    filename <- sprintf("%s_calc.csv", plot_scenarios$file[i])
     
+    table <- read.csv(file.path(".", output_folder, filename)) %>%
+        select(time, proppop_S, proppop_R1, proppop_V) %>% 
+        filter(time %in% seq(0, max(time), 1)) %>% 
+        mutate(scenario=plot_scenarios$scenario[i],
+               .before=time) %>% 
+        mutate(r0_strain1=plot_scenarios$r0_strain1[i], 
+               crossimm=plot_scenarios$crossimm[i], 
+               seed=plot_scenarios$seed[i], 
+               vacc=plot_scenarios$vacc[i], 
+               vacc_start=plot_scenarios$vacc_start[i], 
+               preinf=plot_scenarios$preinf[i], 
+               transmiss=plot_scenarios$transmiss[i], 
+               match_preinf=plot_scenarios$match_preinf[i])
+    
+    S_R1 <- rbind(S_R1, table)
+}
+
+write.csv(S_R1, file.path(".", output_folder, sprintf("S_R1_r%s.csv", graph_r0)), row.names=F)
+
+graph_table <- S_R1 %>% 
+    mutate(seed = if_else(seed==1200, 0, round(seed))) %>% 
+    mutate(crossimm_seed = sprintf("Seed day %s\nCross-immunity %s%%", seed, crossimm*100)) %>% 
+    mutate(crossimm_seed = fct_relevel(crossimm_seed, unique(str_sort(crossimm_seed, numeric = T)))) %>% 
+    mutate(label = case_when(preinf==2.5 & match_preinf==0.5 & transmiss > 1 ~ "More transmissable (Pre-infectious 0.5 days)",
+                             preinf==2.5 & match_preinf==1.5 & transmiss > 1 ~ "More transmissable (Pre-infectious 1.5 days)",
+                             preinf==0.5 ~ "Pre-infectious 0.5 days",
+                             preinf==1.5 ~ "Pre-infectious 1.5 days",
+                             preinf==2.5 & transmiss==1 ~ "Resident only")) %>% 
+    mutate(label = fct_relevel(label,
+                               c("Resident only",
+                                 "Pre-infectious 0.5 days",
+                                 "More transmissable (Pre-infectious 0.5 days)",
+                                 "Pre-infectious 1.5 days",
+                                 "More transmissable (Pre-infectious 1.5 days)"
+                               ))) %>% 
+    mutate(vacc_label = factor(sprintf("Vaccine coverage %s%%", vacc_start*100))) %>%
+    pivot_longer(starts_with("proppop"), names_to="compartment", values_to="proportion") %>% 
+    mutate(compartment = fct_recode(compartment,
+                                    "Recovered from resident strain" = "proppop_R1",
+                                    "Susceptible" = "proppop_S",
+                                    "Vaccinated and uninfected" = "proppop_V"))
+
+
+seed_line <- graph_table %>% 
+    group_by(crossimm_seed) %>% 
+    summarise(seed_line = mean(seed))
+
+graph_table %>% 
+    filter(compartment!="Vaccinated and uninfected") %>% 
+    ggplot(aes(x=time, y=proportion, colour=label, linetype=compartment)) +
+    geom_line() +
+    facet_grid(rows=vars(crossimm_seed),
+               cols=vars(vacc_label)) +
+    scale_colour_manual(values=legend_colour) +
+    scale_x_continuous(limits=c(0,graph_limit)) +
+    geom_vline(data=seed_line, 
+               aes(xintercept=seed_line), 
+               linetype="dashed", size=0.5) +
+    scale_y_continuous(labels = scales::label_percent(accuracy=0.1)) +
+    labs(caption = bquote("Resident strain" ~ R[0] == .(graph_r0)),
+         x = "Day",
+         y = "% population",
+         colour = "Variant characteristic",
+         linetype = "Compartment") +
+    theme(plot.caption = element_text(hjust = 1),
+          strip.text.y.right = element_text(angle = 0)) 
+
+
+graph_name <- file.path(".", output_folder, sprintf("S_R1_r%s.png", graph_r0))
+
+ggsave(graph_name, width = 28, height = 28, units = "cm", dpi = 300)
+
 ###  -----
 graph_name <- file.path(".", output_folder, sprintf("end_vacc%s_start%s_r%s.png", graph_vacc, graph_vacc_start, graph_r0))
 

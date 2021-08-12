@@ -289,12 +289,15 @@ for (i in 1:nrow(combos)) {
     
     ## Peak prevalence of infectious cases
     peakprev_I <- max(table$I)
+    proppop_peak_new_I <- peak_new_I/population[["total_pop"]]
     peakprev_I_time <- table$time[table$I == peakprev_I]
     
     peakprev_I1 <- max(table$I1)
+    proppop_peak_new_I1 <- peak_new_I1/population[["total_pop"]]
     peakprev_I1_time <- table$time[table$I1 == peakprev_I1]
     
     peakprev_I2 <- max(table$I2)
+    proppop_peak_new_I2 <- peak_new_I2/population[["total_pop"]]
     peakprev_I2_time <- table$time[table$I2 == peakprev_I2][1]
     
     ## Proportion of peak prev
@@ -322,10 +325,13 @@ for (i in 1:nrow(combos)) {
                 .before = time) %>% 
             mutate(
                 peak_new_I = NA,
+                proppop_peak_new_I = NA,
                 peak_time = NA,
                 peak_new_I1 = NA,
+                proppop_peak_new_I1 = NA,
                 peak_time_new_I1 = NA,
                 peak_new_I2 = NA,
+                proppop_peak_new_I2 = NA,
                 peak_time_new_I2 = NA,
                 peakprev_I = NA,
                 peakprev_I_time = NA,
@@ -374,10 +380,13 @@ for (i in 1:nrow(combos)) {
             .before = time) %>% 
         mutate(
             peak_new_I = peak_new_I,
+            proppop_peak_new_I = proppop_peak_new_I,
             peak_time = peak_time,
             peak_new_I1 = peak_new_I1,
+            proppop_peak_new_I1 = proppop_peak_new_I1,
             peak_time_new_I1 = peak_time_new_I1,
             peak_new_I2 = peak_new_I2,
+            proppop_peak_new_I2 = proppop_peak_new_I2,
             peak_time_new_I2 = peak_time_new_I2,
             peakprev_I = peakprev_I,
             peakprev_I_time = peakprev_I_time,
