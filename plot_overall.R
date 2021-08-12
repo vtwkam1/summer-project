@@ -2,6 +2,7 @@
 
 library(tidyverse)
 library(ggrepel)
+library(cowplot)
 # library(RColorBrewer)
 
 theme_set(
@@ -59,19 +60,87 @@ end %>% count(match_set) # 99 unique match_sets
 # [(3 R0 strain1 x 4 crossimm x 2 preinf x 4 seed x 3 vacc_start) x 2 match transmiss] + (3 R0 strain 1 x 3 vacc_start)
 # (288x2) + 9 = 585 permutations
 
-# extract r0s -------
+# Extract r0s -------
+## Check if matching for more transmiss done correctly
+end %>%
+    filter(transmiss > 1) %>% 
+    group_by(match_set_pt) %>% 
+    summarise(r0_strain1 = n_distinct(r0_strain1),
+              more_transmiss = n_distinct(higher_r0/r0_strain1),
+              more_transmiss_label = n_distinct(transmiss),
+              r0_strain2 = n_distinct(r0_strain2),
+              match_preinf = n_distinct(as.numeric(match_preinf)),
+              seed = n_distinct(seed),
+              crossimm = n_distinct(crossimm)) %>% 
+    summarise(across(!match_set_pt, ~ sum(.x!=1, na.rm = TRUE)))
+
 matched_r0 <- end %>%
     filter(transmiss > 1) %>% 
     group_by(match_set_pt) %>% 
-    summarise(more_transmiss = mean(transmiss),
-              r0_strain1 = mean(r0_strain1),
+    summarise(r0_strain1 = mean(r0_strain1),
+              more_transmiss = mean(higher_r0/r0_strain1),
+              more_transmiss_label = mean(transmiss),
+              r0_strain2 = mean(r0_strain2),
               match_preinf = mean(as.numeric(match_preinf)),
               seed = mean(seed),
               crossimm = mean(crossimm)) %>% 
-    mutate(r0_strain2 = more_transmiss*r0_strain1,
-           .before = seed)
+    mutate(crossimm = factor(sprintf("%s%%", crossimm*100)),
+           match_preinf = factor(sprintf("%s days", match_preinf)),
+           seed = factor(round(seed))) %>% 
+    mutate(crossimm = fct_shift(crossimm, 1))
+    
 
-write.csv(matched_r0, file.path(".", output_folder, "matched_r0.csv"), row.names = F)
+# (matched_r0, file.path(".", output_folder, "matched_r0.csv"), row.names = F)
+
+## Plot matched R0s
+more_transmiss_r1pt5 <- matched_r0 %>% 
+    filter(r0_strain1==1.5) %>%
+    ggplot(aes(x=match_preinf, y=r0_strain2, group=crossimm, colour=seed, shape=crossimm)) +
+    geom_point(position=position_dodge(width=0.5)) +
+    geom_hline(yintercept=1.5) +
+    labs(title = bquote("Resident strain" ~ R[0] == 1.5),
+         x = "",
+         y = "",
+         shape = "Cross-immunity",
+         colour = "Variant seed day") +
+    scale_colour_brewer(palette="YlOrRd") +
+    theme_dark() +
+    scale_shape(guide = 'none')
+
+more_transmiss_r2pt5 <- matched_r0 %>% 
+    filter(r0_strain1==2.5) %>%
+    ggplot(aes(x=match_preinf, y=r0_strain2, group=crossimm, colour=seed, shape=crossimm)) +
+    geom_point(position=position_dodge(width=0.5)) +
+    geom_hline(yintercept=2.5) +
+    labs(title = bquote("Resident strain" ~ R[0] == 2.5),
+         x = "",
+         y = bquote("More transmissible variant" ~~ R[0]),
+         shape = "Cross-immunity",
+         colour = "Variant seed day") +
+    scale_colour_brewer(palette="YlOrRd") +
+    theme_dark() +
+    scale_shape(guide = 'none')
+
+more_transmiss_r4 <- matched_r0 %>% 
+    filter(r0_strain1==4) %>%
+    ggplot(aes(x=match_preinf, y=r0_strain2, group=crossimm, colour=seed, shape=crossimm)) +
+    geom_point(position=position_dodge(width=0.5)) +
+    geom_hline(yintercept=4) +
+    labs(title = bquote("Resident strain" ~ R[0] == 4),
+         x = "Pre-infectious period matched to",
+         y = "",
+         shape = "Cross-immunity",
+         colour = "Variant seed day") +
+    scale_colour_brewer(palette="YlOrRd") +
+    theme_dark() 
+
+more_transmiss_graph <- plot_grid(
+    more_transmiss_r1pt5, more_transmiss_r2pt5, more_transmiss_r4,
+    ncol=1,
+    align = "v"
+    )
+
+ggsave(file.path(".", output_folder, "more_transmiss_r0s.png"), width = 20, height = 20, units = "cm", dpi = 300)
 
 # Check which ended prematurely ----
 run_longer <- end %>% filter(I > 5) ## Removed and reran in other script
