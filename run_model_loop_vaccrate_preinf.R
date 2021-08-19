@@ -13,22 +13,22 @@ if (!dir.exists(output_folder)) {
 }
 
 theme_set(
-    theme_gray(base_size = 12)
+    theme_gray(base_size = 11)
 )
 
 ##### !!!! Check match_set!!!!!
 r0_strain1_range <- c(4)
 transmiss_range <- c(1)
-crossimm_range <- c(0.25, 0.5, 0.75, 1)
-# seed_range <- c(0, 111.02, 222.62, 301.16)
-# seed_range <- c(0, 49.22, 63.1, 72.92)
-seed_range <- c(0, 28.72, 35.6, 40.5)
+crossimm_range <- c(0.25, 0.75, 1)
+# seed_range <- c(0, 65.82, 87.18, 102.24)
+# seed_range <- c(0, 33.42, 41.72, 47.6)
+seed_range <- c(0, 21.44, 26.32, 29.78)
 preinf_range <- c(0.5, 1.5)
 vacc_range <- c(0)
 vacc_start_range <- c(0)
-# vacc_start_range <- c(0.1111, 0.3333)
-# vacc_start_range <- c(0.2, 0.45)
-# vacc_start_range <- c(0.25, 0.5625)
+# vacc_start_range <- c(0.1667, 0.3334)
+# vacc_start_range <- c(0.3, 0.6)
+# vacc_start_range <- c(0.375, 0.75)
 
 
 combos_specify <- crossing(r0_strain1_range, transmiss_range, crossimm_range, seed_range, preinf_range, vacc_range, vacc_start_range) 
@@ -41,6 +41,9 @@ combos <- rbind(combos, combos_specify)
 
 # Append new combos
 write.table(combos, file=file.path(".", output_folder, "combos.csv"), append=T, quote=F, sep=",", row.names=F, col.names=F)
+
+# Read combos
+#  <- read.csv(file.path(".", output_folder, "combos.csv"))
 
 #### Running missing models ----
 # combos <- as.data.frame(missing) %>% 
@@ -63,6 +66,23 @@ for (i in 1:nrow(combos)) {
     # match_set <- sprintf("r%s_transmiss%s_crossimm%s_seed%s_preinf%s_vacc0_start_0", combos$r0_strain1_range[i], round(combos$transmiss_range[i],2), combos$crossimm_range[i], combos$seed_range[i], combos$preinf_range[i]) %>% str_replace_all("\\.", "pt")
     match_set <- combos$match_set[i]
     # match_set <- scenario
+    
+    # TIME
+    if (combos$r0_strain1_range[i]==1.5 & combos$vacc_start_range[i]==0.3334) {
+        run_time <- 1500
+    } else {
+        run_time <- 800
+    }
+    
+    dt <- 0.02
+    
+    sys_time <- format(Sys.time(), "%d-%m-%Y--%H-%M")
+    
+    seedtime2 <- combos$seed_range[i]
+    
+    if (seedtime2 > run_time) {
+        seedtime2 <- run_time
+    }
     
     # PARAMETERS
     population <- c(total_pop = 1000000)
@@ -100,12 +120,12 @@ for (i in 1:nrow(combos)) {
     strain1[["subclin_period"]] <- strain1[["inf_duration"]]
     strain1[["subclin_rec_rate"]] <- 1/strain1[["subclin_period"]]
     strain1[["gen_time"]] <- strain1[["preinf_period"]] + strain1[["inf_duration"]]
-    strain1[["beta"]] <- strain1[["r0"]]/(population[["total_pop"]]*strain1[["inf_duration"]])
+    strain1[["r0_scalingfactor"]] <- ((1-strain1[["prop_clin"]])*strain1[["subclin_inf"]]) + strain1[["prop_clin"]]
+    strain1[["beta"]] <- (strain1[["r0"]]/strain1[["r0_scalingfactor"]])/(population[["total_pop"]]*strain1[["inf_duration"]])
     strain1[["vaccrisk_i"]] <- 1 - strain1[["vacceff_i"]]
     strain1[["vaccrisk_d_i"]] <- (1 - strain1[["vacceff_d"]])/strain1[["vaccrisk_i"]]
     
     ## Strain 2
-    seedtime2 <- combos$seed_range[i]
     transmiss = combos$transmiss_range[i]
     
     strain2 <- c(
@@ -126,14 +146,12 @@ for (i in 1:nrow(combos)) {
     strain2[["subclin_period"]] <- strain2[["inf_duration"]]
     strain2[["subclin_rec_rate"]] <- 1/strain2[["subclin_period"]]
     strain2[["gen_time"]] <- strain2[["preinf_period"]] + strain2[["inf_duration"]]
-    strain2[["beta"]] <- strain2[["r0"]]/(population[["total_pop"]]*strain2[["inf_duration"]])
+    strain2[["r0_scalingfactor"]] <- ((1-strain2[["prop_clin"]])*strain2[["subclin_inf"]]) + strain2[["prop_clin"]]
+    strain2[["beta"]] <- (strain2[["r0"]]/strain2[["r0_scalingfactor"]])/(population[["total_pop"]]*strain2[["inf_duration"]])
     strain2[["vaccrisk_i"]] <- 1 - strain2[["vacceff_i"]]
     strain2[["vaccrisk_d_i"]] <- (1 - strain2[["vacceff_d"]])/strain2[["vaccrisk_i"]]
     
     seed2 <- data.frame(var=c("I_s2", "I_pc2"), time = rep(seedtime2, 2), value = rep(initial_inf, 2), method = rep("add", 2))
-    
-    # Strain 1 only
-    # seed2 <- data.frame(var=c("I_s2", "I_pc2", "I_c2"), time = rep(seedtime2, 3), value = rep(0, 3), method = rep("add", 3))
     
     # STATES
     state <- c(S = NA,
@@ -164,12 +182,6 @@ for (i in 1:nrow(combos)) {
     
     # Create parameter list
     parameters <- list(strain1 = strain1, strain2 = strain2, vaccination = vaccination, population = population)
-    
-    # TIME
-    run_time <- 2000
-    dt <- 0.02
-    
-    sys_time <- format(Sys.time(), "%d-%m-%Y--%H-%M")
     
     # RUN MODEL
     table <- run_model(dt, run_time, state, parameters, seed2, scenario, sys_time, output_folder)
@@ -333,6 +345,7 @@ for (i in 1:nrow(combos)) {
                 peak_new_I2 = NA,
                 proppop_peak_new_I2 = NA,
                 peak_time_new_I2 = NA,
+                proppop_Cum_Inf = NA,
                 peakprev_I = NA,
                 peakprev_I_time = NA,
                 peakprev_I1 = NA,
@@ -388,6 +401,7 @@ for (i in 1:nrow(combos)) {
             peak_new_I2 = peak_new_I2,
             proppop_peak_new_I2 = proppop_peak_new_I2,
             peak_time_new_I2 = peak_time_new_I2,
+            proppop_Cum_Inf = Cum_Inf/population[["total_pop"]],
             peakprev_I = peakprev_I,
             peakprev_I_time = peakprev_I_time,
             peakprev_I1 = peakprev_I1,
