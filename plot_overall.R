@@ -46,7 +46,8 @@ end <- end %>%
                                ))) %>% 
     mutate(r0_strain2 = case_when(transmiss==1 ~ r0_strain1,
                                   transmiss > 1 ~ higher_r0),
-           proppop_peak_new_I = peak_new_I/population[["total_pop"]]) %>% 
+           proppop_peak_new_I = peak_new_I/population[["total_pop"]],
+           proppop_Cum_Inf = Cum_Inf/population[["total_pop"]]) %>% 
     mutate(vacc_cov = factor(sprintf("Vaccine coverage\n%s%%", vacc_start*100)),
            crossimm_label = factor(sprintf("Cross-immunity\n%s%%", crossimm*100)),
            crossimm_perc = factor(sprintf("%s%%", crossimm*100)),
@@ -374,6 +375,26 @@ graph_table %>%
 graph_name <- file.path(".", output_folder, sprintf("allinf_ collapsed_r%s.png", graph_r0))
 
 ggsave(graph_name, width = 26, height = 10, units = "cm", dpi = 300)
+
+## Cumulative new infections, relative to population size, collapsed
+graph_table %>%
+    ggplot(aes(x=seed_round, y=proppop_Cum_Inf, colour=label, group=crossimm_perc, shape=crossimm_perc)) +
+    geom_point(position=position_dodge(width=0.8)) +
+    facet_grid(cols=vars(vacc_cov)) +
+    labs(caption = bquote("Resident strain" ~ R[0] == .(graph_r0)),
+         x = "Novel variant seed time (days)",
+         y = "Final number of new infections (relative to population size)",
+         colour = "Variant characteristic",
+         shape = "Cross-immunity") +
+    scale_colour_manual(values=legend_colour) +
+    scale_y_continuous(labels = label_comma(),
+                       limits = c(0, NA)) +
+    scale_shape_manual(values=legend_shape)
+
+graph_name <- file.path(".", output_folder, sprintf("cuminf_ collapsed_r%s.png", graph_r0))
+
+ggsave(graph_name, width = 26, height = 10, units = "cm", dpi = 300)
+
 
 ## Reinfections
 graph_table %>%
