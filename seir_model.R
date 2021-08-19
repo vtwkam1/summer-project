@@ -155,7 +155,7 @@ run_model <- function(dt, run_time, state_init, parameters, seed2, scenario, sys
     }
     
     # Specify run time
-    times <- seq(0, run_time, dt)
+    times <- round(seq(0, run_time, dt), 2)
     
     # Run model
     output <- as.data.frame(ode(y = state, times = times, func = seir_ode, parms = parameters, events = list(data = seed2)), method = "ode45")
