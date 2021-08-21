@@ -606,7 +606,7 @@ graph_name <- file.path(".", output_folder, sprintf("peak_new_I1_I2_collapse_r%s
 ggsave(graph_name, width = 25, height = 14, units = "cm", dpi = 300)
 
 # Peak time -----
-graph_r0 <- 1.5
+graph_r0 <- 2.5
 graph_vaccstart_range <- sort(unique(end$vacc_start[end$r0_strain1==graph_r0]))
 
 peaktime_strain1only_vacc0 <- end$peak_time[end$r0_strain1==graph_r0 & end$seed==resident_seedproxy & end$vacc_start == graph_vaccstart_range[1]]
@@ -683,8 +683,17 @@ graph_table %>%
     scale_y_continuous(labels = label_comma()) +
     scale_shape_manual(values = legend_shape)
 
+resident_peak <- graph_table %>% 
+    filter(seed==resident_seedproxy) %>% 
+    select(vacc_cov, peak_time)
+
 graph_table %>% 
     ggplot(aes(x=seed_dodge, y=peak_time, colour=label, group=crossimm_perc, shape=crossimm_perc)) +
+    geom_hline(data=resident_peak,
+               aes(yintercept=peak_time),
+               size = 1,
+               colour=legend_colour[["Resident strain only"]],
+               alpha = 0.3) +
     geom_point() +
     geom_line(aes(group=line_group, linetype=crossimm_perc), 
               size = 0.5,
@@ -702,7 +711,7 @@ graph_table %>%
     scale_x_continuous(labels = function(x) graph_table %>% pull(seed_round) %>% fct_drop() %>% levels() %>% .[x]) +
     scale_linetype_manual(values=legend_linetype)
 
-graph_name <- file.path(".", output_folder, sprintf("peaktime_collapse_r%s.png", graph_r0))
+graph_name <- file.path(".", output_folder, sprintf("peaktime_collapse2_r%s.png", graph_r0))
 
 ggsave(graph_name, width = 25, height = 14, units = "cm", dpi = 300)
 
