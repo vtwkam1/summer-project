@@ -441,7 +441,7 @@ graph_table %>%
     scale_x_continuous(labels = function(x) graph_table %>% pull(seed_round) %>% fct_drop() %>% levels() %>% .[x]) +
     scale_linetype_manual(values=legend_linetype)
 
-graph_name <- file.path(".", output_folder, sprintf("reinf_collapse_r%s.png", graph_r0))
+graph_name <- file.path(".", output_folder, sprintf("strain2_only_collapse_r%s.png", graph_r0))
 
 ggsave(graph_name, width = 25, height = 14, units = "cm", dpi = 300)
 
@@ -470,6 +470,29 @@ graph_name <- file.path(".", output_folder, sprintf("proppopstrain2_r%s.png", gr
 
 ggsave(graph_name, width = 25, height = 14, units = "cm", dpi = 300)
 
+## Resident strain only
+graph_table %>%
+    ggplot(aes(x=seed_dodge, y=proppop_strain1_only, colour=label, group=crossimm_perc, shape=crossimm_perc)) +
+    geom_point() +
+    geom_line(aes(group=line_group, linetype=crossimm_perc), 
+              size = 0.5,
+              alpha = 0.4) +
+    facet_grid(cols=vars(vacc_cov)) +
+    labs(caption = bquote("Resident strain" ~ R[0] == .(graph_r0)),
+         x = "Day variant seeded",
+         y = "Final % population infected only by resident strain",
+         colour = "Variant characteristic",
+         shape = "Cross-immunity",
+         linetype = "Cross-immunity") +
+    scale_colour_manual(values=legend_colour) +
+    scale_y_continuous(labels = label_percent()) +
+    scale_shape_manual(values=legend_shape) +
+    scale_x_continuous(labels = function(x) graph_table %>% pull(seed_round) %>% fct_drop() %>% levels() %>% .[x]) +
+    scale_linetype_manual(values=legend_linetype)
+
+graph_name <- file.path(".", output_folder, sprintf("strain1_only_collapse_r%s.png", graph_r0))
+
+ggsave(graph_name, width = 25, height = 14, units = "cm", dpi = 300)
 
 # Peak new cases -----------------------------
 graph_r0 <- 4
