@@ -34,17 +34,17 @@ end <- end %>%
     mutate(across(c(r0_strain1, crossimm, seed, vacc, vacc_start, preinf, transmiss), as.numeric)) %>% 
     mutate(match_set_pt = str_replace_all(match_set, "pt", ".")) %>% 
     mutate(match_preinf = str_extract(match_set_pt, "(?<=preinf)\\d*\\.?\\d*")) %>% 
-    mutate(label = case_when(preinf==2.5 & match_preinf==0.5 & transmiss > 1 ~ "More transmissable (Pre-infectious 0.5 days)",
-                             preinf==2.5 & match_preinf==1.5 & transmiss > 1 ~ "More transmissable (Pre-infectious 1.5 days)",
-                             preinf==0.5 ~ "Pre-infectious 0.5 days",
-                             preinf==1.5 ~ "Pre-infectious 1.5 days",
+    mutate(label = case_when(preinf==2.5 & match_preinf==0.5 & transmiss > 1 ~ "More transmissable (r[init] matched to d[E] 0.5)",
+                             preinf==2.5 & match_preinf==1.5 & transmiss > 1 ~ "More transmissable (r[init] matched to d[E] 1.5)",
+                             preinf==0.5 ~ "Pre-infectious (d[E]) 0.5 days",
+                             preinf==1.5 ~ "Pre-infectious (d[E]) 1.5 days",
                              preinf==2.5 & transmiss==1 ~ "Resident strain only")) %>% 
     mutate(label = fct_relevel(label,
                                c("Resident strain only",
-                                 "Pre-infectious 0.5 days",
-                                 "More transmissable (Pre-infectious 0.5 days)",
-                                 "Pre-infectious 1.5 days",
-                                 "More transmissable (Pre-infectious 1.5 days)"
+                                 "Pre-infectious (d[E]) 0.5 days",
+                                 "More transmissable (r[init] matched to d[E] 0.5)",
+                                 "Pre-infectious (d[E]) 1.5 days",
+                                 "More transmissable (r[init] matched to d[E] 1.5)"
                                ))) %>% 
     mutate(r0_strain2 = case_when(transmiss==1 ~ r0_strain1,
                                   transmiss > 1 ~ higher_r0)) %>% 
@@ -58,13 +58,17 @@ end <- end %>%
            crossimm_perc = fct_shift(crossimm_perc, 1),
            seed_round = fct_relevel(seed_round, "NA"))
 
-
-
 legend_colour <- c("Resident strain only" = "#008000",
-                   "Pre-infectious 0.5 days" = "#ff6262",
-                   "More transmissable (Pre-infectious 0.5 days)" = "#cc0000",
-                   "Pre-infectious 1.5 days" = "#7676ff",
-                   "More transmissable (Pre-infectious 1.5 days)" = "#0000b3")
+                   "Pre-infectious (d[E]) 0.5 days" = "#ff6262",
+                   "More transmissable (r[init] matched to d[E] 0.5)" = "#cc0000",
+                   "Pre-infectious (d[E]) 1.5 days" = "#7676ff",
+                   "More transmissable (r[init] matched to d[E] 1.5)" = "#0000b3")
+
+variant_label <- c("Resident strain only" = "Resident strain only",
+                   "Pre-infectious (d[E]) 0.5 days" = bquote("Pre-infectious" ~ (d[E]) ~ "0.5 days"),
+                   "More transmissable (r[init] matched to d[E] 0.5)" = bquote("More transmissable" ~ (r[init] ~ matched ~ to ~ d[E] ~ 0.5)),
+                   "Pre-infectious (d[E]) 1.5 days" = bquote("Pre-infectious" ~ (d[E]) ~ "0.5 days"),
+                   "More transmissable (r[init] matched to d[E] 1.5)" = bquote("More transmissable" ~ (r[init] ~ matched ~ to ~ d[E] ~ 0.5)))
 
 legend_shape <- c("25%" = 16,
                   "75%" = 17,
@@ -261,6 +265,7 @@ graph_table <- end %>%
                                   crossimm_perc==levels(crossimm_perc)[3] ~ as.numeric(seed_dodge)+0.2),
            line_group = str_c(crossimm_perc, label))
 
+
 # Relative, final number infected (collapsed)
 graph_table %>% 
     filter(seed!=resident_seedproxy) %>% 
@@ -273,7 +278,8 @@ graph_table %>%
          y = "Final number population infected with at least one strain,\nrelative to resident strain only",
          colour = "Variant characteristic",
          shape = "Cross-immunity") +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_shape_manual(values=legend_shape)
 
 graph_table %>% 
@@ -292,7 +298,8 @@ graph_table %>%
          shape = "Cross-immunity",
          linetype = "Cross-immunity") +
     scale_x_continuous(labels = function(x) graph_table %>% pull(seed_round) %>% fct_drop() %>% levels() %>% .[x]) +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_shape_manual(values=legend_shape) +
     scale_linetype_manual(values=legend_linetype)
 
@@ -311,7 +318,8 @@ graph_table %>%
          y = "Final % population infected with at least one strain",
          colour = "Variant characteristic",
          shape = "Cross-immunity") +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_y_continuous(labels = label_percent(),
                        limits = c(0, NA)) +
     scale_shape_manual(values=legend_shape)
@@ -329,7 +337,8 @@ graph_table %>%
          colour = "Variant characteristic",
          shape = "Cross-immunity",
          linetype = "Cross-immunity") +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_y_continuous(labels = label_percent(),
                        limits = c(0, NA)) +
     scale_shape_manual(values=legend_shape) +
@@ -351,7 +360,8 @@ graph_table %>%
          y = "Overall infections, as % population size",
          colour = "Variant characteristic",
          shape = "Cross-immunity") +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_y_continuous(labels = label_percent(),
                        limits = c(0,NA)
                        # limits = c(0, round(max(graph_table$proppop_Cum_Inf) + 0.1, 1))
@@ -371,7 +381,8 @@ graph_table %>%
          colour = "Variant characteristic",
          shape = "Cross-immunity",
          linetype = "Cross-immunity") +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_y_continuous(labels = label_percent(),
                        limits = c(0,NA)
                        # limits = c(0, round(max(graph_table$proppop_Cum_Inf) + 0.1, 1))
@@ -394,7 +405,8 @@ graph_table %>%
          y = "Final % population re-infected",
          colour = "Variant characteristic",
          shape = "Cross-immunity") +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_y_continuous(labels = label_percent()) +
     scale_shape_manual(values=legend_shape)
 
@@ -411,7 +423,8 @@ graph_table %>%
          colour = "Variant characteristic",
          shape = "Cross-immunity",
          linetype = "Cross-immunity") +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_y_continuous(labels = label_percent()) +
     scale_shape_manual(values=legend_shape) +
     scale_x_continuous(labels = function(x) graph_table %>% pull(seed_round) %>% fct_drop() %>% levels() %>% .[x]) +
@@ -435,7 +448,8 @@ graph_table %>%
          colour = "Variant characteristic",
          shape = "Cross-immunity",
          linetype = "Cross-immunity") +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_y_continuous(labels = label_percent()) +
     scale_shape_manual(values=legend_shape) +
     scale_x_continuous(labels = function(x) graph_table %>% pull(seed_round) %>% fct_drop() %>% levels() %>% .[x]) +
@@ -460,7 +474,8 @@ graph_table %>%
          colour = "Variant characteristic",
          shape = "Cross-immunity",
          linetype = "Cross-immunity") +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_y_continuous(labels = label_percent()) +
     scale_shape_manual(values=legend_shape) +
     scale_x_continuous(labels = function(x) graph_table %>% pull(seed_round) %>% fct_drop() %>% levels() %>% .[x]) +
@@ -484,7 +499,8 @@ graph_table %>%
          colour = "Variant characteristic",
          shape = "Cross-immunity",
          linetype = "Cross-immunity") +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_y_continuous(labels = label_percent()) +
     scale_shape_manual(values=legend_shape) +
     scale_x_continuous(labels = function(x) graph_table %>% pull(seed_round) %>% fct_drop() %>% levels() %>% .[x]) +
@@ -494,8 +510,34 @@ graph_name <- file.path(".", output_folder, sprintf("strain1_only_collapse_r%s.p
 
 ggsave(graph_name, width = 25, height = 14, units = "cm", dpi = 300)
 
+## Proportion infections which are vaccine breakthrough
+graph_table %>%
+    filter(vacc!=0) %>% 
+    ggplot(aes(x=seed_dodge, y=prop_Cum_Infv, colour=label, group=crossimm_perc, shape=crossimm_perc)) +
+    geom_point() +
+    geom_line(aes(group=line_group, linetype=crossimm_perc), 
+              size = 0.5,
+              alpha = 0.4) +
+    facet_grid(cols=vars(vacc_cov)) +
+    labs(caption = bquote("Resident strain" ~ R[0] == .(graph_r0)),
+         x = "Day variant seeded",
+         y = "% infections among vaccinated",
+         colour = "Variant characteristic",
+         shape = "Cross-immunity",
+         linetype = "Cross-immunity") +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
+    scale_y_continuous(labels = label_percent()) +
+    scale_shape_manual(values=legend_shape) +
+    scale_x_continuous(labels = function(x) graph_table %>% pull(seed_round) %>% fct_drop() %>% levels() %>% .[x]) +
+    scale_linetype_manual(values=legend_linetype)
+
+graph_name <- file.path(".", output_folder, sprintf("propinf_ vacc_r%s.png", graph_r0))
+
+ggsave(graph_name, width = 25, height = 14, units = "cm", dpi = 300)
+
 # Peak new cases -----------------------------
-graph_r0 <- 4
+graph_r0 <- 2.5
 graph_vaccstart_range <- sort(unique(end$vacc_start[end$r0_strain1==graph_r0]))
 
 peakinf_strain1only_vacc0 <- end$peak_new_I[end$r0_strain1==graph_r0 & end$seed==resident_seedproxy & end$vacc_start == graph_vaccstart_range[1]]
@@ -527,7 +569,8 @@ graph_table %>%
          colour = "Variant characteristic",
          shape = "Cross-immunity") +
     scale_y_log10() +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_shape_manual(values=legend_shape)
 
 graph_table %>% 
@@ -546,7 +589,8 @@ graph_table %>%
          shape = "Cross-immunity",
          linetype = "Cross-immunity") +
     scale_y_log10() +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_shape_manual(values=legend_shape) +
     scale_x_continuous(labels = function(x) graph_table %>% pull(seed_round) %>% fct_drop() %>% levels() %>% .[x]) +
     scale_linetype_manual(values=legend_linetype)
@@ -566,7 +610,8 @@ graph_table %>%
          colour = "Variant characteristic",
          shape = "Cross-immunity") +
     # scale_y_log10() +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_y_continuous(labels = label_percent(accuracy=0.1),
                        limits=c(0,NA)) +
     scale_shape_manual(values=legend_shape)
@@ -585,7 +630,8 @@ graph_table %>%
          shape = "Cross-immunity",
          linetype = "Cross-immunity") +
     # scale_y_log10() +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_y_continuous(labels = label_percent(accuracy=0.1),
                        limits=c(0,NA)) +
     scale_shape_manual(values=legend_shape) +
@@ -608,8 +654,8 @@ graph_table %>%
     geom_line(aes(group=line_group, linetype=crossimm_perc), 
               size = 0.5,
               alpha = 0.4) +
-    facet_grid(cols=vars(vacc_cov),
-               rows=vars(strain)) +
+    facet_grid(rows=vars(vacc_cov),
+               cols=vars(strain)) +
     labs(caption = bquote("Resident strain" ~ R[0] == .(graph_r0)),
          x = "Day variant seeded",
          y = "Peak daily cases, as % population",
@@ -617,16 +663,17 @@ graph_table %>%
          shape = "Cross-immunity",
          linetype = "Cross-immunity") +
     # scale_y_log10() +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_y_continuous(labels = label_percent(accuracy=0.1),
                        limits=c(0,NA)) +
     scale_shape_manual(values=legend_shape) +
     scale_x_continuous(labels = function(x) graph_table %>% pull(seed_round) %>% fct_drop() %>% levels() %>% .[x]) +
     scale_linetype_manual(values=legend_linetype)
 
-graph_name <- file.path(".", output_folder, sprintf("peak_new_I1_I2_collapse_r%s.png", graph_r0))
+graph_name <- file.path(".", output_folder, sprintf("peak_new_I1_I2rows_collapse_r%s.png", graph_r0))
 
-ggsave(graph_name, width = 25, height = 14, units = "cm", dpi = 300)
+ggsave(graph_name, width = 25, height = 18, units = "cm", dpi = 300)
 
 # Peak time -----
 graph_r0 <- 2.5
@@ -661,7 +708,8 @@ graph_table %>%
          colour = "Variant characteristic",
          shape = "Cross-immunity") +
     # scale_y_log10() +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_shape_manual(values=legend_shape)
     
 
@@ -681,7 +729,8 @@ graph_table %>%
          shape = "Cross-immunity",
          linetype = "Cross-immunity") +
     # scale_y_log10() +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_shape_manual(values=legend_shape) +
     scale_x_continuous(labels = function(x) graph_table %>% pull(seed_round) %>% fct_drop() %>% levels() %>% .[x]) +
     scale_linetype_manual(values=legend_linetype)
@@ -702,7 +751,8 @@ graph_table %>%
          colour = "Variant characteristic",
          shape = "Cross-immunity") +
     # scale_y_log10() +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_y_continuous(labels = label_comma()) +
     scale_shape_manual(values = legend_shape)
 
@@ -729,7 +779,8 @@ graph_table %>%
          shape = "Cross-immunity",
          linetype = "Cross-immunity") +
     # scale_y_log10() +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_shape_manual(values=legend_shape) +
     scale_x_continuous(labels = function(x) graph_table %>% pull(seed_round) %>% fct_drop() %>% levels() %>% .[x]) +
     scale_linetype_manual(values=legend_linetype)
@@ -758,7 +809,8 @@ graph_table %>%
          shape = "Cross-immunity",
          linetype = "Cross-immunity") +
     # scale_y_log10() +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_shape_manual(values=legend_shape) +
     scale_x_continuous(labels = function(x) graph_table %>% pull(seed_round) %>% fct_drop() %>% levels() %>% .[x]) +
     scale_linetype_manual(values=legend_linetype) +
@@ -951,8 +1003,8 @@ ggsave(graph_name, width = 30, height = 40, units = "cm", dpi = 300)
 # names(legend_linetype) <- str_c("Cross-immunity", names(legend_linetype), sep=" ")
 
 
-graph_r0 <- 4
-graph_limit <- 800
+graph_r0 <- 2.5
+graph_limit <- 400
 
 plot_scenarios <- end %>% filter(r0_strain1==graph_r0)
 
@@ -1041,7 +1093,8 @@ ggplot(graph_table, aes(x=day, y=proppop_new_I, colour=label, linetype=crossimm_
     geom_line() +
     facet_grid(rows=vars(seed_label),
                cols=vars(vacc_label)) +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_x_continuous(limits=c(0,graph_limit)) +
     geom_vline(data=seed_line, 
                aes(xintercept=seed_line), 
@@ -1076,7 +1129,8 @@ graph_table %>%
     geom_line() +
     facet_grid(rows=vars(crossimm_seed),
                cols=vars(vacc_label)) +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_x_continuous(limits=c(0,graph_limit)) +
     geom_vline(data=seed_line, 
                aes(xintercept=seed_line), 
@@ -1116,7 +1170,8 @@ graph_limit <- 350
         geom_line() +
         facet_grid(rows=vars(crossimm_label),
                    cols=vars(seed_label)) +
-        scale_colour_manual(values=legend_colour) +
+        scale_colour_manual(values=legend_colour,
+                            labels=variant_label) +
         scale_x_continuous(limits=c(0,graph_limit)) +
         geom_vline(data=seed_line, 
                    aes(xintercept=seed_line), 
@@ -1153,7 +1208,8 @@ graph_limit <- 350
         geom_line() +
         facet_grid(rows=vars(crossimm_label),
                    cols=vars(seed_label)) +
-        scale_colour_manual(values=legend_colour) +
+        scale_colour_manual(values=legend_colour,
+                            labels=variant_label) +
         scale_x_continuous(limits=c(0,graph_limit)) +
         geom_vline(data=seed_line, 
                    aes(xintercept=seed_line), 
@@ -1173,30 +1229,32 @@ graph_limit <- 350
 # }
     
 
-## Daily new variant cases, log scale
+## Daily new cases, log scale
 seed_line <- graph_table %>% 
     group_by(seed_label) %>% 
     summarise(seed_line = mean(seed))
 
-graph_table %>% 
+### Variant
+variant_log <- graph_table %>% 
     filter(label!="Resident strain only") %>% 
-    ggplot(aes(x=day, y=proppop_new_I2, colour=label, linetype=crossimm_perc)) +
+    ggplot(aes(x=day, y=daily_new_I2, colour=label, linetype=crossimm_perc)) +
     geom_line() +
     facet_grid(rows=vars(seed_label),
                cols=vars(vacc_label)) +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_x_continuous(limits=c(0,graph_limit)) +
     geom_vline(data=seed_line, 
                aes(xintercept=seed_line), 
                linetype="dashed", size=0.5) +
     scale_y_log10(
-        # limits = c(1e-8, 1e-01)
+        limits = c(1e-14, 1e+05)
         ) +
     labs(
         # caption = bquote(atop("Resident strain" ~ R[0] == .(graph_r0), "Y-axis truncated to magnify initial dynamics")
         caption = bquote("Resident strain" ~ R[0] == .(graph_r0)),
          x = "Day",
-         y = "Daily new variant cases, as proportion of population",
+         y = "Daily new variant cases",
          colour = "Variant characteristic",
          linetype = "Cross-immunity") +
     theme(plot.caption = element_text(hjust = 1),
@@ -1204,6 +1262,75 @@ graph_table %>%
     scale_linetype_manual(values=legend_linetype)
 
 graph_name <- file.path(".", output_folder, sprintf("newinf2_r%s_log.png", graph_r0))
+
+ggsave(graph_name, width = 30, height = 20, units = "cm", dpi = 300)
+
+## Resident
+resident_log <- graph_table %>% 
+    ggplot(aes(x=day, y=daily_new_I1, colour=label, linetype=crossimm_perc)) +
+    geom_line() +
+    facet_grid(rows=vars(seed_label),
+               cols=vars(vacc_label)) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
+    scale_x_continuous(limits=c(0,graph_limit)) +
+    geom_vline(data=seed_line, 
+               aes(xintercept=seed_line), 
+               linetype="dashed", size=0.5) +
+    scale_y_log10(
+        limits = c(1e-14, 1e+05)
+    ) +
+    labs(
+        # caption = bquote(atop("Resident strain" ~ R[0] == .(graph_r0), "Y-axis truncated to magnify initial dynamics")
+        caption = bquote("Resident strain" ~ R[0] == .(graph_r0)),
+        x = "Day",
+        y = "Daily new resident cases",
+        colour = "Variant characteristic",
+        linetype = "Cross-immunity") +
+    theme(plot.caption = element_text(hjust = 1),
+          strip.text.y.right = element_text(angle = 0)) +
+    scale_linetype_manual(values=legend_linetype)
+
+graph_name <- file.path(".", output_folder, sprintf("newinf1_r%s_log.png", graph_r0))
+
+ggsave(graph_name, width = 30, height = 20, units = "cm", dpi = 300)
+
+variant_log / resident_log + 
+    plot_layout(guides = 'collect') +
+    plot_annotation(tag_levels = 'A')
+
+graph_name <- file.path(".", output_folder, sprintf("newinf1_2_r%s_log_grid.png", graph_r0))
+
+ggsave(graph_name, width = 30, height = 40, units = "cm", dpi = 300)
+
+
+### Combined
+graph_table %>% 
+    ggplot(aes(x=day, y=daily_new_I, colour=label, linetype=crossimm_perc)) +
+    geom_line() +
+    facet_grid(rows=vars(seed_label),
+               cols=vars(vacc_label)) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
+    scale_x_continuous(limits=c(0,graph_limit)) +
+    geom_vline(data=seed_line, 
+               aes(xintercept=seed_line), 
+               linetype="dashed", size=0.5) +
+    scale_y_log10(
+        # limits = c(1e-8, 1e-01)
+    ) +
+    labs(
+        # caption = bquote(atop("Resident strain" ~ R[0] == .(graph_r0), "Y-axis truncated to magnify initial dynamics")
+        caption = bquote("Resident strain" ~ R[0] == .(graph_r0)),
+        x = "Day",
+        y = "Daily new cases",
+        colour = "Variant characteristic",
+        linetype = "Cross-immunity") +
+    theme(plot.caption = element_text(hjust = 1),
+          strip.text.y.right = element_text(angle = 0)) +
+    scale_linetype_manual(values=legend_linetype)
+
+graph_name <- file.path(".", output_folder, sprintf("newinf_r%s_log.png", graph_r0))
 
 ggsave(graph_name, width = 30, height = 20, units = "cm", dpi = 300)
 
@@ -1275,7 +1402,8 @@ graph_table %>%
     geom_line() +
     facet_grid(rows=vars(crossimm_seed),
                cols=vars(vacc_label)) +
-    scale_colour_manual(values=legend_colour) +
+    scale_colour_manual(values=legend_colour,
+                        labels=variant_label) +
     scale_x_continuous(limits=c(0,graph_limit)) +
     geom_vline(data=seed_line, 
                aes(xintercept=seed_line), 
